@@ -68,25 +68,16 @@ class Retrotide:
     _MAX_DESIGNS_HARD_LIMIT = 20
 
     def initiate(self) -> None:
-        """
-        Lazy-import retrotide so that the MCP server can still register the
-        tool even when retrotide is not installed (it will only fail at
-        call-time, giving a useful error message).
-        """
+        self._import_error = None
+        self._designPKS = None
+        self._MolFromSmiles = None
         try:
-            # retrotide exposes its main entry point at the package level:
-            #   from retrotide import designPKS
-            # designPKS(target_smiles, ...)  → list[PKSDesign]
-            from modules.pks.tools.retrotide_designer import designPKS          # noqa: F401 – stored below
-            from rdkit.Chem import MolFromSmiles      # noqa: F401
+            from retrotide.retrotide import designPKS
+            from rdkit.Chem import MolFromSmiles
             self._designPKS = designPKS
             self._MolFromSmiles = MolFromSmiles
         except ImportError as exc:
-            raise ImportError(
-                "RetroTide is not installed.  "
-                "Install it with:  pip install retrotide\n"
-                f"Original error: {exc}"
-            ) from exc
+            self._import_error = exc  # store, do NOT raise`
 
     # ------------------------------------------------------------------ #
     def run(
@@ -191,5 +182,8 @@ class Retrotide:
 #  Module-level alias so pytest can import the function directly.              #
 # --------------------------------------------------------------------------- #
 _instance = Retrotide()
-_instance.initiate()
-retrotide = _instance.run   # retrotide("CCC(=O)O") → list[dict]
+try:
+    _instance.initiate()
+except Exception as e:
+    _instance._import_error = e
+retrotide_designer = _instance.run
