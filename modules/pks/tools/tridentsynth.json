@@ -1,7 +1,7 @@
 {
-  "id": "org.bioe234.function.pks.tridentsynth.v1",
-  "name": "TridentSynth Query Builder",
-  "description": "Validate and prepare a TridentSynth synthesis query for a target molecule. Mirrors the public TridentSynth form fields: target SMILES, PKS/Bio/Chem strategy selection, optional Bio/Chem step limits, PKS release mechanism, PKS starter/extender substrates, and optional DORAnet C/N/O atom filters.",
+  "id": "org.bioe234.function.pks.tridentsynth.v2",
+  "name": "TridentSynth Live Runner",
+  "description": "Submit a live TridentSynth job through the public TridentSynth web form and optionally poll the results page until completion.",
   "type": "function",
   "keywords": [
     "PKS",
@@ -11,7 +11,9 @@
     "retrosynthesis",
     "RetroTide",
     "DORAnet",
-    "SMILES"
+    "SMILES",
+    "live runner",
+    "submit job"
   ],
   "date_created": null,
   "date_last_modified": null,
@@ -19,7 +21,7 @@
     {
       "name": "target_smiles",
       "type": "string",
-      "description": "Single target-molecule SMILES string for TridentSynth. Should represent one molecule only."
+      "description": "Single target-molecule SMILES string for TridentSynth."
     },
     {
       "name": "use_pks",
@@ -55,49 +57,73 @@
       "name": "pks_release_mechanism",
       "type": "string",
       "optional": true,
-      "description": "PKS release mechanism. Allowed values: 'thiolysis' or 'cyclization'."
+      "description": "PKS release mechanism. Allowed values: thiolysis or cyclization."
     },
     {
       "name": "pks_starters",
       "type": "array",
       "optional": true,
-      "description": "List of PKS starter substrates. Allowed values: Malonyl-CoA, Methylmalonyl-CoA, Allylmalonyl-CoA, Methoxymalonyl-CoA, Hydroxymalonyl-CoA."
+      "description": "List of PKS starter substrates."
     },
     {
       "name": "pks_extenders",
       "type": "array",
       "optional": true,
-      "description": "List of PKS extender substrates. Allowed values: Malonyl-CoA, Methylmalonyl-CoA, Ethylmalonyl-CoA, Methoxymalonyl-CoA, Allylmalonyl-CoA."
+      "description": "List of PKS extender substrates."
     },
     {
       "name": "max_carbon",
       "type": "integer",
       "optional": true,
-      "description": "Optional DORAnet maximum carbon atom filter for intermediates."
+      "description": "Optional DORAnet maximum carbon atom filter."
     },
     {
       "name": "max_nitrogen",
       "type": "integer",
       "optional": true,
-      "description": "Optional DORAnet maximum nitrogen atom filter for intermediates."
+      "description": "Optional DORAnet maximum nitrogen atom filter."
     },
     {
       "name": "max_oxygen",
       "type": "integer",
       "optional": true,
-      "description": "Optional DORAnet maximum oxygen atom filter for intermediates."
+      "description": "Optional DORAnet maximum oxygen atom filter."
     },
     {
       "name": "auto_optimize_unspecified",
       "type": "boolean",
       "optional": true,
       "description": "If true, auto-fill omitted optional settings with a compact exploratory configuration. Defaults to true."
+    },
+    {
+      "name": "wait_for_completion",
+      "type": "boolean",
+      "optional": true,
+      "description": "If true, poll the results page until the job completes. Defaults to true."
+    },
+    {
+      "name": "poll_seconds",
+      "type": "integer",
+      "optional": true,
+      "description": "Seconds between results-page polling attempts. Defaults to 10."
+    },
+    {
+      "name": "timeout_seconds",
+      "type": "integer",
+      "optional": true,
+      "description": "Maximum total polling time in seconds. Defaults to 300."
+    },
+    {
+      "name": "acknowledge_controlled_substance_warning",
+      "type": "boolean",
+      "optional": true,
+      "description": "If the site shows its controlled-substance acknowledgement screen, continue only when this is true."
     }
   ],
   "outputs": [
     {
       "type": "object",
-      "description": "JSON-serializable query summary containing the normalized TridentSynth parameters, inferred strategy label, any auto-filled defaults, warnings, and the public submission URL."
+      "description": "JSON-serializable summary containing the submitted query, parsed job info, results URL, and parsed results if available."
     }
   ],
   "examples": [
@@ -105,12 +131,12 @@
       "input": {
         "target_smiles": "CCCCCCC",
         "use_pks": true,
-        "use_bio": true
+        "use_bio": true,
+        "max_bio_steps": 1
       },
       "output": {
         "result": {
-          "ok": true,
-          "strategy_label": "PKS + Bio"
+          "ok": true
         }
       }
     },
@@ -120,19 +146,11 @@
         "use_pks": true,
         "use_bio": false,
         "use_chem": false,
-        "pks_starters": [
-          "Malonyl-CoA",
-          "Methylmalonyl-CoA"
-        ],
-        "pks_extenders": [
-          "Malonyl-CoA",
-          "Methylmalonyl-CoA"
-        ]
+        "wait_for_completion": false
       },
       "output": {
         "result": {
-          "ok": true,
-          "strategy_label": "PKS"
+          "ok": true
         }
       }
     }
