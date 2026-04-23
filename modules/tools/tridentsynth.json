@@ -1,0 +1,148 @@
+{
+  "id": "org.bioe234.function.pks.tridentsynth.v1",
+  "name": "TridentSynth Query Builder",
+  "description": "Validate and prepare a TridentSynth synthesis query for a target molecule. Mirrors the public TridentSynth form fields: target SMILES, PKS/Bio/Chem strategy selection, optional Bio/Chem step limits, PKS release mechanism, PKS starter/extender substrates, and optional DORAnet C/N/O atom filters.",
+  "type": "function",
+  "keywords": [
+    "PKS",
+    "polyketide",
+    "TridentSynth",
+    "biosynthesis",
+    "retrosynthesis",
+    "RetroTide",
+    "DORAnet",
+    "SMILES"
+  ],
+  "date_created": null,
+  "date_last_modified": null,
+  "inputs": [
+    {
+      "name": "target_smiles",
+      "type": "string",
+      "description": "Single target-molecule SMILES string for TridentSynth. Should represent one molecule only."
+    },
+    {
+      "name": "use_pks",
+      "type": "boolean",
+      "optional": true,
+      "description": "Whether to include the PKS synthesis strategy. Defaults to true."
+    },
+    {
+      "name": "use_bio",
+      "type": "boolean",
+      "optional": true,
+      "description": "Whether to include the Bio synthesis strategy. Defaults to false."
+    },
+    {
+      "name": "use_chem",
+      "type": "boolean",
+      "optional": true,
+      "description": "Whether to include the Chem synthesis strategy. Defaults to false."
+    },
+    {
+      "name": "max_bio_steps",
+      "type": "integer",
+      "optional": true,
+      "description": "Maximum biological synthesis steps. Allowed values: 1, 2, or 3."
+    },
+    {
+      "name": "max_chem_steps",
+      "type": "integer",
+      "optional": true,
+      "description": "Maximum chemical synthesis steps. Allowed values: 1, 2, or 3."
+    },
+    {
+      "name": "pks_release_mechanism",
+      "type": "string",
+      "optional": true,
+      "description": "PKS release mechanism. Allowed values: 'thiolysis' or 'cyclization'."
+    },
+    {
+      "name": "pks_starters",
+      "type": "array",
+      "optional": true,
+      "description": "List of PKS starter substrates. Allowed values: Malonyl-CoA, Methylmalonyl-CoA, Allylmalonyl-CoA, Methoxymalonyl-CoA, Hydroxymalonyl-CoA."
+    },
+    {
+      "name": "pks_extenders",
+      "type": "array",
+      "optional": true,
+      "description": "List of PKS extender substrates. Allowed values: Malonyl-CoA, Methylmalonyl-CoA, Ethylmalonyl-CoA, Methoxymalonyl-CoA, Allylmalonyl-CoA."
+    },
+    {
+      "name": "max_carbon",
+      "type": "integer",
+      "optional": true,
+      "description": "Optional DORAnet maximum carbon atom filter for intermediates."
+    },
+    {
+      "name": "max_nitrogen",
+      "type": "integer",
+      "optional": true,
+      "description": "Optional DORAnet maximum nitrogen atom filter for intermediates."
+    },
+    {
+      "name": "max_oxygen",
+      "type": "integer",
+      "optional": true,
+      "description": "Optional DORAnet maximum oxygen atom filter for intermediates."
+    },
+    {
+      "name": "auto_optimize_unspecified",
+      "type": "boolean",
+      "optional": true,
+      "description": "If true, auto-fill omitted optional settings with a compact exploratory configuration. Defaults to true."
+    }
+  ],
+  "outputs": [
+    {
+      "type": "object",
+      "description": "JSON-serializable query summary containing the normalized TridentSynth parameters, inferred strategy label, any auto-filled defaults, warnings, and the public submission URL."
+    }
+  ],
+  "examples": [
+    {
+      "input": {
+        "target_smiles": "CCCCCCC",
+        "use_pks": true,
+        "use_bio": true
+      },
+      "output": {
+        "result": {
+          "ok": true,
+          "strategy_label": "PKS + Bio"
+        }
+      }
+    },
+    {
+      "input": {
+        "target_smiles": "CC=C(C)C(=O)O",
+        "use_pks": true,
+        "use_bio": false,
+        "use_chem": false,
+        "pks_starters": [
+          "Malonyl-CoA",
+          "Methylmalonyl-CoA"
+        ],
+        "pks_extenders": [
+          "Malonyl-CoA",
+          "Methylmalonyl-CoA"
+        ]
+      },
+      "output": {
+        "result": {
+          "ok": true,
+          "strategy_label": "PKS"
+        }
+      }
+    }
+  ],
+  "execution_details": {
+    "language": "Python",
+    "source": "tools/tridentsynth.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+    "mcp_name": "tridentsynth"
+  }
+}
