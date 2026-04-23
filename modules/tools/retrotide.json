@@ -1,0 +1,127 @@
+{
+  "id": "org.bioe234.function.pks.retrotide.v1",
+  "name": "PKS Design via RetroTide",
+  "description": "Given a target polyketide SMILES, proposes chimeric type-I modular PKS designs that can synthesise the compound's carbon backbone without post-PKS tailoring enzymes, ranked by chemical similarity to the target.",
+  "type": "function",
+  "keywords": [
+    "PKS",
+    "polyketide synthase",
+    "retrobiosynthesis",
+    "RetroTide",
+    "SMILES",
+    "chimeric PKS",
+    "modular PKS",
+    "biodesign",
+    "natural products",
+    "metabolic engineering"
+  ],
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "smiles",
+      "type": "string",
+      "description": "SMILES string of the target polyketide molecule. Must be parseable by RDKit. Example: \"CCCC(=O)O\" for butyric acid."
+    },
+    {
+      "name": "max_designs",
+      "type": "integer",
+      "description": "Maximum number of PKS designs to return, ordered best-first by chemical similarity (1–20, default 5).",
+      "default": 5
+    },
+    {
+      "name": "similarity",
+      "type": "string",
+      "description": "Fingerprint-based similarity metric used to rank designs against the target. Accepted values: \"tanimoto\" (default) or \"dice\".",
+      "default": "tanimoto"
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "array",
+      "description": "Ordered list of PKS design objects (best similarity first). Each object contains: rank (integer), similarity (number, 0–1), product_smiles (string), exact_match (boolean), and modules (array of module descriptor objects). Each module descriptor contains: starter (boolean), domains (array of strings), extender (string or null), at_specificity (string or null)."
+    }
+  ],
+
+  "examples": [
+    {
+      "input": {
+        "smiles": "CCCC(=O)O",
+        "max_designs": 3,
+        "similarity": "tanimoto"
+      },
+      "output": {
+        "result": [
+          {
+            "rank": 1,
+            "similarity": 0.85,
+            "product_smiles": "CCCC(=O)O",
+            "exact_match": true,
+            "modules": [
+              {
+                "starter": true,
+                "domains": ["KSq", "AT", "ACP"],
+                "extender": "propionyl-CoA",
+                "at_specificity": "propionyl-CoA"
+              },
+              {
+                "starter": false,
+                "domains": ["KS", "AT", "KR", "ACP"],
+                "extender": "malonyl-CoA",
+                "at_specificity": "malonyl-CoA"
+              }
+            ]
+          }
+        ]
+      },
+      "notes": "Illustrative output; exact values depend on RetroTide's current domain database."
+    },
+    {
+      "input": {
+        "smiles": "CC(O)CC(=O)O",
+        "max_designs": 5,
+        "similarity": "dice"
+      },
+      "output": {
+        "result": [
+          {
+            "rank": 1,
+            "similarity": 0.72,
+            "product_smiles": "CC(O)CC(=O)O",
+            "exact_match": true,
+            "modules": []
+          }
+        ]
+      },
+      "notes": "3-hydroxybutyric acid; RetroTide should find a KR-containing design."
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/retrotide.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+
+    "mcp_name": "pks_design_retrotide",
+    "seq_params": []
+  },
+
+  "trigger_phrases": [
+    "design a PKS for",
+    "what PKS can make",
+    "synthesise using only a PKS",
+    "purely PKS-makeable",
+    "PKS retrobiosynthesis",
+    "retrotide",
+    "find a PKS pathway for",
+    "modular PKS design for"
+  ],
+
+  "dependencies": {
+    "pip": ["retrotide", "rdkit"]
+  }
+}
