@@ -77,7 +77,7 @@ class Retrotide:
             # retrotide exposes its main entry point at the package level:
             #   from retrotide import designPKS
             # designPKS(target_smiles, ...)  → list[PKSDesign]
-            from modules.pks.tools.retrotide import designPKS          # noqa: F401 – stored below
+            from modules.pks.tools.retrotide_designer import designPKS          # noqa: F401 – stored below
             from rdkit.Chem import MolFromSmiles      # noqa: F401
             self._designPKS = designPKS
             self._MolFromSmiles = MolFromSmiles

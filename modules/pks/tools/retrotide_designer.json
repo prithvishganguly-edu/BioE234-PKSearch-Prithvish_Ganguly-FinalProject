@@ -101,7 +101,7 @@
 
   "execution_details": {
     "language": "Python",
-    "source": "modules/pks/tools/retrotide.py",
+    "source": "modules/pks/tools/retrotide_designer.py",
     "initialization": "initiate",
     "execution": "run",
     "disposal": null,
