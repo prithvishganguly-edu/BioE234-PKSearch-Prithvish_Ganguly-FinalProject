@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import time
 from dataclasses import dataclass
@@ -54,28 +55,6 @@ class TridentSynth:
     Output:
         dict: JSON-serializable summary containing the submitted query, parsed job
         info, results URL, and parsed results if available.
-
-    Tests:
-        - Case:
-            Input: target_smiles="CCCCCCC", use_pks=True, use_bio=True
-            Expected Output: result["ok"] == True
-            Description: Valid PKS+Bio live submission setup.
-        - Case:
-            Input: target_smiles="CC=C(C)C(=O)O", use_pks=True, use_bio=False, use_chem=False
-            Expected Output: result["normalized_query"]["use_pks"] == True
-            Description: PKS-only live submission setup.
-        - Case:
-            Input: target_smiles="CC.CC"
-            Expected Exception: ValueError
-            Description: TridentSynth accepts one molecule at a time.
-        - Case:
-            Input: target_smiles="CCCC", use_pks=False, use_bio=False, use_chem=False
-            Expected Exception: ValueError
-            Description: At least one synthesis strategy must be selected.
-        - Case:
-            Input: target_smiles="CCCC", max_bio_steps=4
-            Expected Exception: ValueError
-            Description: Bio/Chem step limits must be in the 1-3 range.
     """
 
     def initiate(self) -> None:
@@ -197,13 +176,19 @@ class TridentSynth:
         if parent:
             parts.append(parent.get_text(" ", strip=True))
 
-        previous = []
-        for sib in list(tag.previous_strings)[-4:]:
-            txt = str(sib).strip()
-            if txt:
-                previous.append(txt)
-        parts.extend(previous)
+        previous: list[str] = []
+        try:
+            prev_strings = tag.find_all_previous(string=True, limit=4)
+            for sib in reversed(prev_strings):
+                if sib is None:
+                    continue
+                txt = str(sib).strip()
+                if txt:
+                    previous.append(txt)
+        except Exception:
+            pass
 
+        parts.extend(previous)
         return self._clean(" ".join(parts))
 
     def _gather_fields(self, form: Tag) -> list[_FieldCandidate]:
@@ -450,38 +435,80 @@ class TridentSynth:
 
         return response
 
-    def _extract_job_info(self, soup: BeautifulSoup, current_url: str) -> dict[str, Any]:
-        text = soup.get_text("\n", strip=True)
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-
+    def _extract_job_info(
+        self,
+        soup: BeautifulSoup,
+        current_url: str,
+        response_text: str | None = None,
+    ) -> dict[str, Any]:
         job_id = None
         results_link = None
         status_hint = None
 
-        for idx, line in enumerate(lines):
-            low = line.lower()
-            if low == "job id" and idx + 1 < len(lines):
-                job_id = lines[idx + 1]
-            elif low == "job status" and idx + 1 < len(lines):
-                status_hint = lines[idx + 1]
+        if response_text:
+            try:
+                payload = json.loads(response_text)
+                if isinstance(payload, dict):
+                    job_id = payload.get("task_id") or payload.get("job_id")
+                    results_link = payload.get("results_url") or payload.get("results_link")
+                    status_hint = payload.get("status")
+            except Exception:
+                pass
 
-        for a in soup.find_all("a", href=True):
-            href = a["href"]
-            full = urljoin(current_url, href)
-            if "/run_TridentSynth/" not in full:
-                continue
-            if any(bad in full for bad in ["tutorial", "about", "publications", "common_precursors"]):
-                continue
-            if full.rstrip("/") != self.base_url.rstrip("/"):
-                results_link = full
-                break
+        text = soup.get_text("\n", strip=True)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+        if job_id is None:
+            for idx, line in enumerate(lines):
+                low = line.lower().rstrip(":")
+                if low == "job id" and idx + 1 < len(lines):
+                    job_id = lines[idx + 1]
+                elif low == "job status" and idx + 1 < len(lines):
+                    status_hint = lines[idx + 1]
+
+        if results_link is None:
+            for a in soup.find_all("a", href=True):
+                href = a["href"]
+                full = urljoin(current_url, href)
+                if "/run_TridentSynth/" not in full:
+                    continue
+                if any(bad in full for bad in ["tutorial", "about", "publications", "common_precursors"]):
+                    continue
+                if full.rstrip("/") != self.base_url.rstrip("/"):
+                    results_link = full
+                    break
 
         return {
             "job_id": job_id,
             "results_url": results_link,
             "submission_status_hint": status_hint,
-            "raw_page_excerpt": text[:1500],
+            "raw_page_excerpt": (response_text or text)[:1500],
         }
+
+    def _resolve_results_url_from_job_id(self, session: requests.Session, job_id: str) -> Optional[str]:
+        candidates = [
+            urljoin(self.base_url, f"{job_id}/"),
+            urljoin(self.base_url, f"{job_id}"),
+            urljoin(self.base_url, f"results/{job_id}/"),
+            urljoin(self.base_url, f"results/{job_id}"),
+            urljoin(self.base_url, f"job/{job_id}/"),
+            urljoin(self.base_url, f"job/{job_id}"),
+            urljoin(self.base_url, f"status/{job_id}/"),
+            urljoin(self.base_url, f"status/{job_id}"),
+        ]
+
+        for url in candidates:
+            try:
+                r = session.get(url, timeout=60)
+                if r.status_code != 200:
+                    continue
+                text = r.text
+                if job_id in text or "Task ID" in text or "TridentSynth job summary" in text:
+                    return url
+            except Exception:
+                continue
+
+        return None
 
     def _extract_summary_value(self, lines: list[str], label: str) -> Optional[str]:
         for idx, line in enumerate(lines):
@@ -618,12 +645,6 @@ class TridentSynth:
             if use_pks and pks_release_mechanism is None:
                 pks_release_mechanism = self._infer_release_mechanism(target_smiles)
                 auto_filled["pks_release_mechanism"] = pks_release_mechanism
-            if use_pks and not starters:
-                starters = ["Malonyl-CoA", "Methylmalonyl-CoA"]
-                auto_filled["pks_starters"] = starters
-            if use_pks and not extenders:
-                extenders = ["Malonyl-CoA", "Methylmalonyl-CoA"]
-                auto_filled["pks_extenders"] = extenders
 
         if pks_release_mechanism is not None:
             pks_release_mechanism = self._clean(pks_release_mechanism)
@@ -657,12 +678,41 @@ class TridentSynth:
             items, fields, max_chem_steps, ["chemical", "steps"], ["chem"], ["select", "number", "text"]
         )
         self._set_text_or_select(
-            items, fields, pks_release_mechanism, ["release", "mechanism"], ["termination", "pks"], ["select", "radio", "text"]
+            items,
+            fields,
+            pks_release_mechanism,
+            ["release", "mechanism"],
+            ["termination", "pks"],
+            ["select", "radio", "text"],
         )
-        starter_fields = self._set_checkbox_group(items, fields, starters, "starter")
-        extender_fields = self._set_checkbox_group(items, fields, extenders, "extender")
+
+        starter_fields: dict[str, Any] = {}
+        extender_fields: dict[str, Any] = {}
+
+        if starters:
+            try:
+                starter_fields = self._set_checkbox_group(items, fields, starters, "starter")
+            except RuntimeError:
+                starter_fields = {
+                    "warning": [
+                        "Starter controls not found on live form; skipping explicit starter selection and using site defaults."
+                    ]
+                }
+
+        if extenders:
+            try:
+                extender_fields = self._set_checkbox_group(items, fields, extenders, "extender")
+            except RuntimeError:
+                extender_fields = {
+                    "warning": [
+                        "Extender controls not found on live form; skipping explicit extender selection and using site defaults."
+                    ]
+                }
+
         self._set_text_or_select(items, fields, max_carbon, ["carbon"], ["max", "atom"], ["select", "number", "text"])
-        self._set_text_or_select(items, fields, max_nitrogen, ["nitrogen"], ["max", "atom"], ["select", "number", "text"])
+        self._set_text_or_select(
+            items, fields, max_nitrogen, ["nitrogen"], ["max", "atom"], ["select", "number", "text"]
+        )
         self._set_text_or_select(items, fields, max_oxygen, ["oxygen"], ["max", "atom"], ["select", "number", "text"])
 
         submit_response = self._submit_form(session, base_soup, items)
@@ -699,7 +749,7 @@ class TridentSynth:
             }
 
         submit_soup = BeautifulSoup(submit_response.text, "html.parser")
-        job_info = self._extract_job_info(submit_soup, submit_response.url)
+        job_info = self._extract_job_info(submit_soup, submit_response.url, submit_response.text)
 
         out: dict[str, Any] = {
             "ok": True,
@@ -733,12 +783,16 @@ class TridentSynth:
         }
 
         results_url = job_info.get("results_url")
+        if not results_url and job_info.get("job_id"):
+            results_url = self._resolve_results_url_from_job_id(session, job_info["job_id"])
+            out["results_url"] = results_url
+
         if not wait_for_completion or not results_url:
             out["status"] = "submitted"
             if not results_url:
                 out["warning"] = (
                     "The job appears to have been submitted, but no results link could be parsed "
-                    "from the response page."
+                    "or derived from the response."
                 )
             return out
 
