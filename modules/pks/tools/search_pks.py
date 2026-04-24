@@ -34,10 +34,13 @@ Strategy
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
 import time
+import urllib.request
+import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Literal, Optional
 
@@ -54,6 +57,17 @@ _CACHE_TTL = 30 * 24 * 3600   # disk-cache TTL: 30 days
 _CACHE_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "..", "data", "sbspks_smiles_cache.json",
+)
+
+# Path to the on-disk MIBiG compound cache
+_MIBIG_CACHE_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..", "data", "mibig_cache.json",
+)
+
+_MIBIG_ZIP_URL = (
+    "https://github.com/mibig-secmet/mibig-json"
+    "/archive/refs/heads/master.zip"
 )
 
 # ---------------------------------------------------------------------------
@@ -781,6 +795,152 @@ class SearchPKS:
                 json.dump(cache, fh, indent=2)
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# MIBiG index builder (Step 3)
+# ---------------------------------------------------------------------------
+
+def build_mibig_index(
+    cache_path: str = _MIBIG_CACHE_FILE,
+) -> list[dict]:
+    """
+    Download, parse, and cache the MIBiG polyketide compound index.
+
+    MIBiG (Minimum Information about a Biosynthetic Gene Cluster) is a
+    curated database of experimentally validated biosynthetic gene clusters.
+    The full dataset is available as a ZIP archive of JSON files from GitHub
+    (mibig-secmet/mibig-json, master branch).
+
+    Each BGC JSON file has this structure::
+
+        {
+          "cluster": {
+            "mibig_accession": "BGC0000055",
+            "biosyn_class": ["Polyketide", "Saccharide"],
+            "organism_name": "Saccharopolyspora erythraea NRRL 2338",
+            "loci": { "accession": "AM420293.1" },
+            "compounds": [
+              {
+                "compound": "erythromycin A",
+                "chem_struct": "CC[C@@H]1...",   // SMILES
+                ...
+              },
+              ...
+            ]
+          }
+        }
+
+    This function filters for entries whose ``biosyn_class`` list contains
+    ``"Polyketide"``, then yields one dict per compound within each matching
+    BGC that has a ``chem_struct`` (SMILES) value.  A single BGC can produce
+    multiple compounds (e.g. erythromycins A, B, C, D all come from
+    BGC0000055), so the number of returned dicts exceeds the number of BGCs.
+
+    Results are cached to ``cache_path`` as a JSON file.  If a fresh cache
+    (< 30 days old) exists, it is loaded directly without re-downloading.
+
+    Args:
+        cache_path (str): Absolute path for the on-disk JSON cache file.
+            Defaults to ``modules/pks/data/mibig_cache.json``.
+
+    Returns:
+        list[dict]: One dict per polyketide compound with a known SMILES.
+            Each dict contains:
+
+            - ``compound_name`` (str): Compound name from MIBiG, e.g.
+              ``"erythromycin A"``.
+            - ``smiles`` (str): SMILES string from the ``chem_struct`` field.
+            - ``bgc_accession`` (str): MIBiG BGC accession, e.g.
+              ``"BGC0000055"``.  This is the ID the antiSMASH validator
+              (Opshory's component) consumes directly.
+            - ``organism`` (str): Source organism name, e.g.
+              ``"Saccharopolyspora erythraea NRRL 2338"``.
+            - ``genbank_accession`` (str | None): GenBank locus accession
+              for the BGC, e.g. ``"AM420293.1"``, or None if not present.
+
+    Raises:
+        RuntimeError: If the MIBiG ZIP cannot be downloaded and no cache
+            exists on disk.
+    """
+    # --- Load from cache if fresh ----------------------------------------
+    if os.path.exists(cache_path):
+        age = time.time() - os.path.getmtime(cache_path)
+        if age < _CACHE_TTL:
+            try:
+                with open(cache_path, "r", encoding="utf-8") as fh:
+                    cached = json.load(fh)
+                if isinstance(cached, list) and cached:
+                    return cached
+            except Exception:
+                pass  # corrupt cache — fall through to re-download
+
+    # --- Download ZIP archive -------------------------------------------
+    try:
+        with urllib.request.urlopen(_MIBIG_ZIP_URL, timeout=60) as resp:
+            zip_bytes = resp.read()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to download MIBiG dataset from {_MIBIG_ZIP_URL}: {exc}. "
+            "Check network connectivity."
+        ) from exc
+
+    # --- Parse JSON files from the ZIP -----------------------------------
+    entries: list[dict] = []
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        # JSON BGC files live under <root>/data/BGCxxxxxxx.json
+        bgc_files = [
+            n for n in zf.namelist()
+            if n.endswith(".json") and "/data/" in n
+        ]
+        for filename in bgc_files:
+            try:
+                cluster_data = json.loads(zf.read(filename))
+            except Exception:
+                continue  # skip malformed JSON
+
+            cluster = cluster_data.get("cluster", {})
+
+            # Filter: must include Polyketide in biosynthetic class
+            if "Polyketide" not in cluster.get("biosyn_class", []):
+                continue
+
+            bgc_accession: str = cluster.get("mibig_accession", "")
+            organism: str = cluster.get("organism_name", "Unknown")
+            genbank_accession: str | None = (
+                cluster.get("loci", {}).get("accession") or None
+            )
+
+            # One entry per compound that has a SMILES string
+            for compound in cluster.get("compounds", []):
+                smiles = compound.get("chem_struct", "").strip()
+                if not smiles:
+                    continue
+                compound_name = compound.get("compound", "Unknown compound")
+                entries.append({
+                    "compound_name":      compound_name,
+                    "smiles":             smiles,
+                    "bgc_accession":      bgc_accession,
+                    "organism":           organism,
+                    "genbank_accession":  genbank_accession,
+                })
+
+    if not entries:
+        raise RuntimeError(
+            "MIBiG ZIP was downloaded but no polyketide entries with SMILES "
+            "were parsed.  The ZIP structure may have changed."
+        )
+
+    # --- Save to disk cache ----------------------------------------------
+    try:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as fh:
+            json.dump(entries, fh, indent=2)
+    except Exception:
+        pass  # non-fatal: cache write failure never breaks the caller
+
+    return entries
 
 
 # ---------------------------------------------------------------------------
