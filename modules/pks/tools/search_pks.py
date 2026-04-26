@@ -397,6 +397,42 @@ _PKS_MODULE_KEYWORDS = frozenset({
 })
 
 
+def _generate_engineering_hint(entry: dict) -> str | None:
+    """
+    Auto-generate a biosynthetic engineering suggestion for an index entry.
+
+    Returns a plain-English hint only for true PKS intermediate hits
+    (``is_intermediate=True`` and ``module_number > 0``).  Starter-unit
+    hits (``module_number == 0``) get a different message.  Final-product
+    hits (``is_intermediate=False``) return None.
+
+    Args:
+        entry (dict): A single entry from the combined search index.
+
+    Returns:
+        str | None: Engineering hint string, or None for final products.
+    """
+    if not entry.get("is_intermediate"):
+        return None
+
+    mod  = entry.get("module_number")
+    path = entry.get("pathway_name", "this pathway")
+
+    if mod == 0:
+        return (
+            f"Target resembles the starter unit of the {path} pathway. "
+            f"Consider using this starter substrate directly in a chimeric "
+            f"PKS design by substituting the loading module."
+        )
+
+    return (
+        f"Target matches the module {mod} intermediate of the {path} "
+        f"pathway. Consider engineering this PKS to release the chain "
+        f"early by relocating the thioesterase (TE) domain after module "
+        f"{mod}, or by deleting all modules downstream of module {mod}."
+    )
+
+
 class SearchPKS:
     """
     Description:
@@ -489,16 +525,26 @@ class SearchPKS:
         else:
             self._session = None
 
-        # Build path_key → {display_name, pathway_type} lookup
-        self._catalog_meta: dict[str, dict] = {
-            pk: {"name": name, "pathway_type": ptype}
-            for pk, name, ptype in _CATALOG
-        }
+        if self._import_error is not None:
+            self._combined_index: list[dict] = []
+            self._index_fps: list = []
+            return
 
-        # Load SMILES catalog: disk cache → fall through to live fetch
-        self._smiles_cache: dict[str, str] = dict(_SEED_SMILES)
-        if self._import_error is None:
-            self._smiles_cache.update(self._load_smiles_cache())
+        # Load (or build) the combined search index
+        # First run takes ~2-3 min to fetch all SBSPKS pathways and SMILES;
+        # subsequent runs load from the 30-day on-disk cache in <1 second.
+        self._combined_index = self._load_or_build_combined_index()
+
+        # Pre-compute Morgan fingerprints for every index entry so that
+        # run() can use BulkTanimotoSimilarity (vectorised, fast).
+        fps: list = []
+        for entry in self._combined_index:
+            mol = self._MolFromSmiles(entry["smiles"])
+            fps.append(
+                self._GetMorganFP(mol, radius=2, nBits=2048)
+                if mol is not None else None
+            )
+        self._index_fps = fps
 
     # ------------------------------------------------------------------ #
     #  run                                                                 #
@@ -512,51 +558,64 @@ class SearchPKS:
         similarity_threshold: Optional[float] = 0.6,
     ) -> Dict[str, Any]:
         """
-        Queries SBSPKS v2 for structurally similar polyketides and biosynthetic
-        context using local RDKit Tanimoto similarity.
+        Search the combined SBSPKS + MIBiG index for structurally similar
+        polyketides and biosynthetic intermediates.
 
         Args:
             query_smiles (str): SMILES string of the target molecule.
-            search_type (str): "reaction_search" compares structure to stored
-                final-product SMILES for all ~225 SBSPKS compounds and returns
-                ranked hits with basic metadata.  "pathway_search" performs the
-                same structural search and additionally returns the full
-                biosynthetic pathway graph (all reaction steps and intermediates)
-                for each hit.
-            max_results (int): Maximum number of similar compounds to return.
+            search_type (str): ``"reaction_search"`` — rank all 4000+ entries
+                by Tanimoto similarity and return the top hits with full
+                metadata including ``engineering_hint`` for intermediate hits.
+                ``"pathway_search"`` — same search, but additionally fetches
+                the complete biosynthetic step list from SBSPKS for each hit
+                that came from an SBSPKS pathway (adds ``"pathway_steps"``
+                field).
+            max_results (int): Maximum number of results to return (default 5).
             similarity_threshold (float): Minimum Tanimoto score (0.0–1.0);
-                compounds below this value are excluded.
+                entries below this value are excluded (default 0.6).
 
         Returns:
             Dict[str, Any]:
-                - "query_smiles" (str): The input SMILES.
-                - "results" (List[Dict]): Ranked list of similar compounds, each
-                    containing:
-                    - "name" (str): Compound display name from SBSPKS.
-                    - "smiles" (str): SMILES of the matched compound.
-                    - "similarity_score" (float): Tanimoto coefficient (Morgan
-                        fingerprint, radius=2, 2048 bits) against query.
-                    - "pathway_name" (str): Pathway identifier (same as name).
-                    - "pathway_type" (str): Modular PKS / Trans-AT PKS /
-                        Iterative PKS / NRPS / PKS-NRPS Hybrid.
-                    - "organism" (str): Source organism (curated map or
-                        "Unknown").
-                    - "tailoring_reactions" (List[str]): Post-PKS tailoring
-                        steps parsed from the SBSPKS pathway graph
-                        (e.g. "eryF (Hydroxylation)").
-                    - "pathway_steps" (List[str]): Full reaction step labels
-                        (present only when search_type="pathway_search").
-                    - "sbspks_url" (str): Direct URL to the SBSPKS pathway page.
-                - "search_type_used" (str): Which search mode was executed.
-                - "warnings" (List[str]): Non-fatal issues encountered (e.g.
-                    parse errors, network timeouts).
+                - ``"query_smiles"`` (str): The input SMILES.
+                - ``"total_hits"`` (int): Total number of entries that met
+                  the similarity threshold (before truncating to max_results).
+                - ``"results"`` (List[Dict]): Ranked list, highest similarity
+                  first.  Each dict contains:
+
+                    - ``"compound_name"`` (str): Descriptive name, e.g.
+                      ``"Erythromycin module 4 intermediate"``.
+                    - ``"smiles"`` (str): SMILES of the matched entry.
+                    - ``"similarity_score"`` (float): Tanimoto coefficient
+                      (Morgan fingerprint, radius=2, 2048 bits).
+                    - ``"source"`` (str): ``"sbspks"`` or ``"mibig"``.
+                    - ``"is_intermediate"`` (bool): True when the match is a
+                      mid-pathway PKS chain elongation state.
+                    - ``"module_number"`` (int | None): 1-based PKS step for
+                      intermediates; 0 for starter units; None for final
+                      products.
+                    - ``"pathway_name"`` (str): Pathway display name.
+                    - ``"organism"`` (str): Source organism.
+                    - ``"bgc_accession"`` (str | None): MIBiG BGC accession
+                      for MIBiG hits (e.g. ``"BGC0000055"``), None for SBSPKS.
+                    - ``"engineering_hint"`` (str | None): Auto-generated
+                      suggestion for intermediate hits, e.g. ``"Target matches
+                      the module 4 intermediate of the Erythromycin pathway.
+                      Consider engineering this PKS to release the chain early
+                      by relocating the TE domain after module 4…"``.
+                    - ``"pathway_steps"`` (List[str]): All biosynthetic step
+                      labels for this pathway (only present when
+                      ``search_type="pathway_search"`` and source is
+                      ``"sbspks"``).
+
+                - ``"search_type_used"`` (str): Which mode was executed.
+                - ``"warnings"`` (List[str]): Non-fatal issues.
 
         Raises:
-            ValueError: If query_smiles is empty or RDKit cannot parse it.
-            RuntimeError: If required libraries (rdkit, requests) are not
-                installed.
+            ValueError: If ``query_smiles`` is empty, unparseable by RDKit,
+                or a parameter is out of range.
+            RuntimeError: If rdkit or requests are not installed.
         """
-        warnings: List[str] = []
+        run_warnings: List[str] = []
 
         # ---- Dependency check ---------------------------------------- #
         if self._import_error is not None:
@@ -591,83 +650,129 @@ class SearchPKS:
                 f"got {search_type!r}."
             )
 
-        # ---- Compute query fingerprint -------------------------------- #
+        threshold = similarity_threshold if similarity_threshold is not None else 0.0
+
+        if not self._combined_index:
+            run_warnings.append(
+                "Combined index is empty — initiate() may not have completed "
+                "successfully or the index build failed."
+            )
+            return {
+                "query_smiles":     query_smiles,
+                "total_hits":       0,
+                "results":          [],
+                "search_type_used": search_type,
+                "warnings":         run_warnings,
+            }
+
+        # ---- Vectorised Tanimoto against all pre-computed fingerprints -- #
         query_fp = self._GetMorganFP(query_mol, radius=2, nBits=2048)
 
-        # ---- Fetch any missing SMILES from the live server ------------ #
-        # Only attempt for compounds not already in the cache
-        missing = [
-            pk for pk, _, _ in _CATALOG
-            if pk not in self._smiles_cache
+        # Collect (index, fingerprint) pairs for entries with valid SMILES
+        valid_pairs = [
+            (i, fp) for i, fp in enumerate(self._index_fps) if fp is not None
         ]
-        if missing:
-            newly_fetched = self._parallel_fetch_smiles(missing)
-            self._smiles_cache.update(newly_fetched)
-            if newly_fetched:
-                self._save_smiles_cache(self._smiles_cache)
-            if len(newly_fetched) < len(missing):
-                warnings.append(
-                    f"Could not fetch SMILES for "
-                    f"{len(missing) - len(newly_fetched)} compounds "
-                    f"(server timeout or parse error); those were skipped."
-                )
+        bulk_fps = [fp for _, fp in valid_pairs]
+        scores = self._DataStructs.BulkTanimotoSimilarity(query_fp, bulk_fps)
 
-        # ---- Compute Tanimoto for every compound with a known SMILES -- #
-        scored: list[tuple[float, str]] = []  # (score, path_key)
-        for path_key, smiles_str in self._smiles_cache.items():
-            if path_key not in self._catalog_meta:
-                continue
-            mol = self._MolFromSmiles(smiles_str)
-            if mol is None:
-                continue
-            fp = self._GetMorganFP(mol, radius=2, nBits=2048)
-            score = self._DataStructs.TanimotoSimilarity(query_fp, fp)
-            if similarity_threshold is None or score >= similarity_threshold:
-                scored.append((score, path_key))
-
-        # Sort descending by similarity, then take top N
+        # Filter by threshold and collect (score, original_index) pairs
+        scored: list[tuple[float, int]] = [
+            (scores[j], valid_pairs[j][0])
+            for j in range(len(valid_pairs))
+            if scores[j] >= threshold
+        ]
         scored.sort(key=lambda x: x[0], reverse=True)
+        total_hits = len(scored)
         top_hits = scored[:max_results]
 
         if not top_hits:
-            warnings.append(
-                "No compounds in the SBSPKS catalog met the similarity "
-                f"threshold of {similarity_threshold}."
+            run_warnings.append(
+                f"No entries in the combined index met the similarity "
+                f"threshold of {threshold}."
             )
 
-        # ---- Enrich top hits with pathway metadata -------------------- #
+        # ---- Build result dicts --------------------------------------- #
         results: List[Dict[str, Any]] = []
-        for score, path_key in top_hits:
-            meta = self._catalog_meta[path_key]
-            pathway_data = self._fetch_pathway_data(path_key, warnings)
+        for score, idx in top_hits:
+            entry = self._combined_index[idx]
 
-            entry: Dict[str, Any] = {
-                "name":               meta["name"],
-                "smiles":             self._smiles_cache.get(path_key, ""),
-                "similarity_score":   round(score, 4),
-                "pathway_name":       meta["name"],
-                "pathway_type":       meta["pathway_type"],
-                "organism":           _ORGANISM_MAP.get(path_key, "Unknown"),
-                "tailoring_reactions": pathway_data.get("tailoring_reactions", []),
-                "sbspks_url": (
-                    f"{_BASE_URL}/make_reaction.cgi?path={path_key}"
-                ),
+            result: Dict[str, Any] = {
+                "compound_name":    entry["compound_name"],
+                "smiles":           entry["smiles"],
+                "similarity_score": round(score, 4),
+                "source":           entry["source"],
+                "is_intermediate":  entry["is_intermediate"],
+                "module_number":    entry["module_number"],
+                "pathway_name":     entry["pathway_name"],
+                "organism":         entry["organism"],
+                "bgc_accession":    entry["bgc_accession"],
+                "engineering_hint": _generate_engineering_hint(entry),
             }
-            if search_type == "pathway_search":
-                entry["pathway_steps"] = pathway_data.get("all_steps", [])
 
-            results.append(entry)
+            # pathway_search: live-fetch full step list for SBSPKS hits
+            if search_type == "pathway_search" and entry["source"] == "sbspks":
+                path_key = entry.get("path_key", "")
+                if path_key:
+                    pathway_data = self._fetch_pathway_data(
+                        path_key, run_warnings
+                    )
+                    result["pathway_steps"] = pathway_data.get("all_steps", [])
+                else:
+                    result["pathway_steps"] = []
+
+            results.append(result)
 
         return {
             "query_smiles":     query_smiles,
+            "total_hits":       total_hits,
             "results":          results,
             "search_type_used": search_type,
-            "warnings":         warnings,
+            "warnings":         run_warnings,
         }
 
     # ------------------------------------------------------------------ #
     #  Private helpers                                                     #
     # ------------------------------------------------------------------ #
+
+    def _load_or_build_combined_index(self) -> list[dict]:
+        """
+        Load the combined index from the 30-day on-disk cache, or build it
+        from scratch if the cache is missing or stale.
+
+        Building from scratch involves:
+        1. ``build_sbspks_intermediate_index()`` — ~2-3 min on first run
+        2. ``build_mibig_index()`` — ~1 s (downloads ~3 MB ZIP)
+        3. ``build_combined_index()`` — instant (merge in memory)
+
+        Subsequent calls load the saved JSON in under 1 second.
+
+        Returns:
+            list[dict]: The combined index ready for fingerprint computation.
+        """
+        cache_path = _COMBINED_INDEX_CACHE_FILE
+        if os.path.exists(cache_path):
+            age = time.time() - os.path.getmtime(cache_path)
+            if age < _CACHE_TTL:
+                try:
+                    with open(cache_path, "r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                    if isinstance(data, list) and data:
+                        return data
+                except Exception:
+                    pass
+
+        sbspks = build_sbspks_intermediate_index()
+        mibig  = build_mibig_index()
+        combined = build_combined_index(sbspks, mibig)
+
+        try:
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+            with open(cache_path, "w", encoding="utf-8") as fh:
+                json.dump(combined, fh, indent=2)
+        except Exception:
+            pass
+
+        return combined
 
     def _fetch_smiles_for_compound(self, path_key: str) -> str | None:
         """
@@ -1201,11 +1306,14 @@ def build_combined_index(
             "smiles":          node["smiles"],
             "source":          "sbspks",
             "is_intermediate": is_intermediate,
-            "module_number":   mod_num,
+            # Final products use None; intermediates use their step number
+            "module_number":   None if is_final else mod_num,
             "pathway_name":    node["pathway_name"],
             "organism":        node["organism"],
             "compound_name":   compound_name,
             "bgc_accession":   None,
+            # path_key retained so pathway_search mode can fetch live steps
+            "path_key":        node["path_key"],
         })
 
     # --- MIBiG entries ---------------------------------------------------
