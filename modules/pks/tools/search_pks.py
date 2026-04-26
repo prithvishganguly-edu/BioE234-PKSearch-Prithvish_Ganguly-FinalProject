@@ -59,6 +59,18 @@ _CACHE_FILE = os.path.join(
     "..", "data", "sbspks_smiles_cache.json",
 )
 
+# Path to the on-disk SBSPKS intermediate index cache
+_SBSPKS_INDEX_CACHE_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..", "data", "sbspks_intermediate_index.json",
+)
+
+# Path to the on-disk combined index cache
+_COMBINED_INDEX_CACHE_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..", "data", "combined_index.json",
+)
+
 # Path to the on-disk MIBiG compound cache
 _MIBIG_CACHE_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -308,6 +320,12 @@ _CATALOG: list[tuple[str, str, str]] = [
     ("zorbamycin",           "Zorbamycin",              "PKS-NRPS Hybrid"),
     ("zwittermicin",         "Zwittermicin",            "PKS-NRPS Hybrid"),
 ]
+
+# Module-level catalog lookup — avoids rebuilding inside every function call
+_CATALOG_META: dict[str, dict] = {
+    pk: {"name": name, "pathway_type": ptype}
+    for pk, name, ptype in _CATALOG
+}
 
 # SMILES confirmed directly from the live server (display_smiles.cgi)
 _SEED_SMILES: dict[str, str] = {
@@ -941,6 +959,269 @@ def build_mibig_index(
         pass  # non-fatal: cache write failure never breaks the caller
 
     return entries
+
+
+# ---------------------------------------------------------------------------
+# SBSPKS intermediate index builder (Step 4 — source 1)
+# ---------------------------------------------------------------------------
+
+def _fetch_smiles_from_url(args: tuple[str, str]) -> tuple[str, str] | None:
+    """
+    Fetch the SMILES string for one SBSPKS node.
+
+    Args:
+        args: (smiles_file, node_id) — e.g. ("erythromycin.9.smiles",
+              "erythromycin_9").
+
+    Returns:
+        (node_id, smiles_string) on success, or None on any error.
+    """
+    smiles_file, node_id = args
+    url = f"{_BASE_URL}/display_smiles.cgi?smile={smiles_file}"
+    try:
+        import requests as _req
+        resp = _req.get(url, timeout=_REQUEST_TIMEOUT,
+                        headers={"User-Agent": "PKSearch-BioE234/1.0 (educational)"})
+        resp.raise_for_status()
+    except Exception:
+        return None
+    m = re.search(r'name="hid_smile"\s+value="([^"]+)"', resp.text)
+    if m:
+        return node_id, m.group(1).strip()
+    return None
+
+
+def build_sbspks_intermediate_index(
+    cache_path: str = _SBSPKS_INDEX_CACHE_FILE,
+) -> list[dict]:
+    """
+    Fetch every SBSPKS pathway page, extract all biosynthetic nodes
+    (intermediates and final products), retrieve their SMILES, and return
+    a structured index.
+
+    Procedure
+    ---------
+    Phase 1 — pathway pages (225 requests, parallelised):
+        For each path_key in ``_CATALOG``, fetch ``make_reaction.cgi?path=<key>``.
+        Call ``extract_intermediates_from_pathway()`` to get node metadata
+        (node_id, smiles_file, is_final_product, module_number, step_label).
+
+    Phase 2 — SMILES fetches (~2700 requests, parallelised):
+        For every node collected in Phase 1, fetch
+        ``display_smiles.cgi?smile=<smiles_file>`` to retrieve the SMILES
+        string.  Nodes whose SMILES cannot be fetched are silently skipped.
+
+    The result is cached to ``cache_path``.  If a fresh cache exists it is
+    loaded directly.
+
+    Args:
+        cache_path (str): Path for the on-disk JSON cache.
+
+    Returns:
+        list[dict]: One dict per node with a successfully fetched SMILES.
+            Fields:
+
+            - ``node_id`` (str): e.g. ``"erythromycin_9"``.
+            - ``path_key`` (str): e.g. ``"erythromycin"``.
+            - ``smiles`` (str): SMILES string fetched from SBSPKS.
+            - ``is_final_product`` (bool): True for the unnumbered node.
+            - ``module_number`` (int | None): PKS step number from the
+              incoming edge's moduleno= parameter; None for starter units.
+            - ``step_label`` (str): Edge label that produces this node.
+            - ``pathway_name`` (str): Display name from the SBSPKS catalog.
+            - ``pathway_type`` (str): e.g. ``"Modular PKS"``.
+            - ``organism`` (str): Source organism from curated map or
+              ``"Unknown"``.
+    """
+    # --- Load from cache if fresh ----------------------------------------
+    if os.path.exists(cache_path):
+        age = time.time() - os.path.getmtime(cache_path)
+        if age < _CACHE_TTL:
+            try:
+                with open(cache_path, "r", encoding="utf-8") as fh:
+                    cached = json.load(fh)
+                if isinstance(cached, list) and cached:
+                    return cached
+            except Exception:
+                pass
+
+    import requests as _req
+
+    session = _req.Session()
+    session.headers.update({"User-Agent": "PKSearch-BioE234/1.0 (educational)"})
+
+    # --- Phase 1: fetch all pathway pages and extract node metadata ------
+    all_nodes: list[dict] = []  # raw metadata from extract_intermediates_from_pathway
+
+    def _fetch_pathway(path_key: str) -> list[dict]:
+        url = f"{_BASE_URL}/make_reaction.cgi?path={path_key}"
+        try:
+            resp = session.get(url, timeout=_REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            return extract_intermediates_from_pathway(resp.text)
+        except Exception:
+            return []
+
+    path_keys = [pk for pk, _, _ in _CATALOG]
+    print(f"  Phase 1: fetching {len(path_keys)} pathway pages...")
+    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+        futures = {pool.submit(_fetch_pathway, pk): pk for pk in path_keys}
+        for future in as_completed(futures):
+            nodes = future.result()
+            for node in nodes:
+                # Attach catalog metadata now so Phase 2 has it
+                pk = node["path_key"]
+                meta = _CATALOG_META.get(pk, {})
+                node["pathway_name"] = meta.get("name", pk)
+                node["pathway_type"] = meta.get("pathway_type", "Unknown")
+                node["organism"]     = _ORGANISM_MAP.get(pk, "Unknown")
+            all_nodes.extend(nodes)
+
+    print(f"  Phase 1 complete: {len(all_nodes)} nodes extracted")
+
+    # --- Phase 2: fetch SMILES for every node in parallel ----------------
+    fetch_args = [(n["smiles_file"], n["node_id"]) for n in all_nodes]
+    smiles_map: dict[str, str] = {}  # node_id → smiles
+
+    print(f"  Phase 2: fetching {len(fetch_args)} SMILES...")
+    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+        futures = [pool.submit(_fetch_smiles_from_url, args) for args in fetch_args]
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                node_id, smiles = result
+                smiles_map[node_id] = smiles
+
+    print(f"  Phase 2 complete: {len(smiles_map)} SMILES fetched")
+
+    # --- Assemble final list (only nodes with a fetched SMILES) ----------
+    index: list[dict] = []
+    for node in all_nodes:
+        smiles = smiles_map.get(node["node_id"])
+        if not smiles:
+            continue
+        index.append({
+            "node_id":          node["node_id"],
+            "path_key":         node["path_key"],
+            "smiles":           smiles,
+            "is_final_product": node["is_final_product"],
+            "module_number":    node["module_number"],
+            "step_label":       node["step_label"],
+            "pathway_name":     node["pathway_name"],
+            "pathway_type":     node["pathway_type"],
+            "organism":         node["organism"],
+        })
+
+    # --- Save to disk cache ----------------------------------------------
+    try:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as fh:
+            json.dump(index, fh, indent=2)
+    except Exception:
+        pass
+
+    return index
+
+
+# ---------------------------------------------------------------------------
+# Combined index builder (Step 4 — merge both sources)
+# ---------------------------------------------------------------------------
+
+def build_combined_index(
+    sbspks_intermediates: list[dict],
+    mibig_entries: list[dict],
+) -> list[dict]:
+    """
+    Merge the SBSPKS node index and the MIBiG polyketide index into a single
+    unified search index.
+
+    Both sources are normalised to a common schema so that ``run()`` can
+    treat every entry identically during Tanimoto similarity search.
+
+    SBSPKS nodes contribute:
+        - All biosynthetic intermediates (``is_intermediate=True``) — the
+          key non-redundant contribution vs. ClusterCAD.
+        - All final-product nodes (``is_intermediate=False``) — included
+          because many SBSPKS pathways involve compounds not in MIBiG, and
+          having them provides complete pathway context.
+
+    MIBiG entries contribute:
+        - Final products only (``is_intermediate=False``) with
+          ``bgc_accession`` populated, enabling the downstream antiSMASH
+          validator (Opshory's component) to verify hits directly.
+
+    Duplicate SMILES across sources are kept — a match in both is more
+    confident than a match in only one.
+
+    Args:
+        sbspks_intermediates (list[dict]): Output of
+            ``build_sbspks_intermediate_index()``.
+        mibig_entries (list[dict]): Output of ``build_mibig_index()``.
+
+    Returns:
+        list[dict]: Unified index.  Each entry has exactly these keys:
+
+        - ``smiles`` (str): SMILES string.
+        - ``source`` (str): ``"sbspks"`` or ``"mibig"``.
+        - ``is_intermediate`` (bool): True when this entry represents a
+          mid-pathway PKS chain elongation state, not a released product.
+        - ``module_number`` (int | None): 1-based PKS step number for
+          intermediates; 0 for starter-unit nodes; None for final products.
+        - ``pathway_name`` (str): Human-readable pathway name.
+        - ``organism`` (str): Source organism.
+        - ``compound_name`` (str): Descriptive name for this entry.
+        - ``bgc_accession`` (str | None): MIBiG BGC accession (e.g.
+          ``"BGC0000055"``) for MIBiG entries, or None for SBSPKS entries.
+    """
+    combined: list[dict] = []
+
+    # --- SBSPKS entries --------------------------------------------------
+    for node in sbspks_intermediates:
+        is_final = node["is_final_product"]
+        mod_num  = node["module_number"]
+
+        # Starter-unit nodes have module_number=None in the extract output;
+        # represent them as step 0 so they're distinguishable.
+        if not is_final and mod_num is None:
+            mod_num = 0
+
+        is_intermediate = not is_final
+
+        # Build a readable compound_name
+        if is_final:
+            compound_name = node["pathway_name"]
+        elif mod_num == 0:
+            compound_name = f"{node['pathway_name']} (starter unit)"
+        else:
+            compound_name = (
+                f"{node['pathway_name']} module {mod_num} intermediate"
+            )
+
+        combined.append({
+            "smiles":          node["smiles"],
+            "source":          "sbspks",
+            "is_intermediate": is_intermediate,
+            "module_number":   mod_num,
+            "pathway_name":    node["pathway_name"],
+            "organism":        node["organism"],
+            "compound_name":   compound_name,
+            "bgc_accession":   None,
+        })
+
+    # --- MIBiG entries ---------------------------------------------------
+    for entry in mibig_entries:
+        combined.append({
+            "smiles":          entry["smiles"],
+            "source":          "mibig",
+            "is_intermediate": False,
+            "module_number":   None,
+            "pathway_name":    entry["compound_name"],
+            "organism":        entry["organism"],
+            "compound_name":   entry["compound_name"],
+            "bgc_accession":   entry["bgc_accession"],
+        })
+
+    return combined
 
 
 # ---------------------------------------------------------------------------
