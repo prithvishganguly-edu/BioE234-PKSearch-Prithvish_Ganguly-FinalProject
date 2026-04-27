@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# SearchPKS runtime cache files (rebuilt automatically by initiate())
+modules/pks/data/mibig_cache.json
+modules/pks/data/sbspks_smiles_cache.json
+modules/pks/data/sbspks_intermediate_index.json
+modules/pks/data/combined_index.json
