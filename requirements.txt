@@ -3,6 +3,10 @@ google-genai
 python-dotenv
 biopython>=1.80
 pytest>=7.0
-retrotide
+setuptools
+mapchiral
+rdkit
+cobra
+git+https://github.com/JBEI/RetroTide.git
 requests
 beautifulsoup4
