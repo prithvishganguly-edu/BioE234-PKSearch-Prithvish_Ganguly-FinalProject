@@ -2,9 +2,6 @@ from __future__ import annotations
 
 """
 MCP-callable wrapper for the RetroTide PKS retrobiosynthesis tool.
-
-Place this file at:
-    modules/<your_module>/tools/retrotide.py
 """
 
 
@@ -12,99 +9,127 @@ class Retrotide:
     """
     Description:
         Given a target chemical structure as a SMILES string, uses the
-        RetroTide algorithm to propose one or more chimeric type-I modular
-        PKS designs that can synthesise the compound's carbon backbone
-        without any post-PKS enzymatic decoration.  Each design is ranked by
-        chemical similarity (Tanimoto on Morgan fingerprints) between the
-        predicted PKS product and the target.
+        RetroTide algorithm to propose chimeric type-I modular PKS designs
+        that can synthesise the compound's carbon backbone without any
+        post-PKS enzymatic decoration.  Each design is ranked by chemical
+        similarity between the predicted PKS product and the target.
 
         Use this tool when the user asks for a product that can be made
         *purely* by a PKS — i.e. no downstream tailoring enzymes are needed.
 
     Input:
         smiles       (str):  SMILES string for the target polyketide molecule.
-        max_designs  (int):  Maximum number of PKS designs to return
-                             (default 5, max 20).
-        similarity   (str):  Fingerprint metric for ranking.  Choices:
-                             "tanimoto" (default), "dice".
+        max_designs  (int):  Maximum number of PKS designs to return per round
+                             (default 5, max 25).
+        similarity   (str):  Similarity metric for ranking.  Choices:
+                             "atompairs" (default), "atomatompath".
 
     Output:
         list[dict]: Ordered list (best first) of PKS designs.  Each dict has:
             - "rank"            (int)   : 1-based rank (1 = most similar)
-            - "similarity"      (float) : Tanimoto / Dice score vs. target
+            - "similarity"      (float) : similarity score vs. target
             - "product_smiles"  (str)   : SMILES of the PKS product
             - "modules"         (list)  : Ordered list of module descriptors.
               Each module dict contains:
-                  "starter"     (bool)         : True only for the loading module
-                  "domains"     (list[str])     : Active domain labels, e.g.
-                                                 ["KS","AT","KR","ACP"]
-                  "extender"    (str | None)   : Extender unit CoA name, e.g.
-                                                 "malonyl-CoA"
-                  "at_specificity" (str | None): AT domain substrate
+                  "loading"     (bool)         : True only for the loading module
+                  "domains"     (dict)         : Domain labels and their params,
+                                                 e.g. {"AT": {"substrate": "malonyl-CoA"}}
             - "exact_match"     (bool)  : True when product_smiles equals target
 
     Tests:
         - Case:
-            Input: smiles="CCCC(=O)O", max_designs=3, similarity="tanimoto"
-            Expected Output: list with 1-3 dicts each having "rank", "similarity",
+            Input: smiles="CCCC(=O)O", max_designs=3, similarity="atompairs"
+            Expected Output: list with dicts each having "rank", "similarity",
                              "product_smiles", "modules", "exact_match"
             Description: Short-chain acid; RetroTide returns at least one design.
 
         - Case:
-            Input: smiles="", max_designs=5, similarity="tanimoto"
+            Input: smiles="", max_designs=5, similarity="atompairs"
             Expected Output: ValueError raised
             Description: Empty SMILES should raise ValueError.
 
         - Case:
-            Input: smiles="CCCC(=O)O", max_designs=0, similarity="tanimoto"
+            Input: smiles="CCCC(=O)O", max_designs=0, similarity="atompairs"
             Expected Output: ValueError raised
             Description: max_designs must be >= 1.
     """
 
-    # ------------------------------------------------------------------ #
-    #  Allowed similarity metrics accepted by RetroTide's designPKS()      #
-    # ------------------------------------------------------------------ #
-    _VALID_METRICS = {"tanimoto", "dice"}
-    _MAX_DESIGNS_HARD_LIMIT = 20
+    _VALID_METRICS = {"atompairs", "atomatompath"}
+    _MAX_DESIGNS_HARD_LIMIT = 25
 
     def initiate(self) -> None:
         self._import_error = None
         self._designPKS = None
         self._MolFromSmiles = None
+        self._MolToSmiles = None
         try:
             from retrotide.retrotide import designPKS
-            from rdkit.Chem import MolFromSmiles
+            from rdkit.Chem import MolFromSmiles, MolToSmiles
             self._designPKS = designPKS
             self._MolFromSmiles = MolFromSmiles
+            self._MolToSmiles = MolToSmiles
+            self._patch_bcs_domain()
         except ImportError as exc:
-            self._import_error = exc  # store, do NOT raise`
+            self._import_error = exc
 
-    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _patch_bcs_domain() -> None:
+        """Patch bcs to work around two upstream bugs:
+
+        1. Some Domain subclass instances (especially DH) are constructed
+           without 'active' being set, crashing __repr__ / __hash__.
+        2. designPKS generates module combos missing from structureDB,
+           causing KeyError inside Cluster.computeProduct.
+        """
+        from bcs.bcs import Domain, Cluster
+        import retrotide.retrotide as _rt
+        if hasattr(Domain, "_patched"):
+            return
+
+        def _domain_getattr(self, name):
+            if name == "active":
+                self.active = True
+                return True
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute {name!r}"
+            )
+
+        Domain.__getattr__ = _domain_getattr
+
+        _orig_compute = Cluster.computeProduct
+
+        def _safe_compute(self, structureDB, chain=None):
+            try:
+                return _orig_compute(self, structureDB, chain=chain)
+            except (KeyError, IndexError):
+                return None
+
+        Cluster.computeProduct = _safe_compute
+
+        _orig_compare = _rt.compareToTarget
+
+        def _safe_compare(structure, target, similarity="atompairs",
+                          targetpathintegers=None):
+            if structure is None:
+                return 0.0
+            return _orig_compare(structure, target, similarity,
+                                 targetpathintegers)
+
+        _rt.compareToTarget = _safe_compare
+
+        Domain._patched = True
+
     def run(
         self,
         smiles: str,
         max_designs: int = 5,
-        similarity: str = "tanimoto",
+        similarity: str = "atompairs",
     ) -> list[dict]:
-        """
-        Call RetroTide and return serialisable PKS design objects.
+        if self._import_error is not None:
+            raise RuntimeError(
+                f"RetroTide dependencies not available: {self._import_error}"
+            )
 
-        Parameters
-        ----------
-        smiles : str
-            SMILES of the target polyketide (must be non-empty and parseable
-            by RDKit).
-        max_designs : int
-            How many top-ranked designs to return (1 – 20).
-        similarity : str
-            Ranking metric: "tanimoto" or "dice".
-
-        Returns
-        -------
-        list[dict]
-            JSON-serialisable list of PKS design dicts, best first.
-        """
-        # ---- Input validation ---------------------------------------- #
         smiles = smiles.strip()
         if not smiles:
             raise ValueError("smiles must be a non-empty SMILES string.")
@@ -126,61 +151,53 @@ class Retrotide:
                 f"got {similarity!r}."
             )
 
-        # ---- Call RetroTide ------------------------------------------ #
-        # designPKS signature (from JBEI/RetroTide):
-        #   designPKS(
-        #       targetSMILES: str,
-        #       similarityMetric: str = "tanimoto",   # "tanimoto" | "dice"
-        #       numDesigns:      int  = 10,
-        #   ) -> list[PKSDesign]
-        #
-        # Each PKSDesign has attributes:
-        #   .similarity    float          – score vs. target
-        #   .productSMILES str            – SMILES of PKS product
-        #   .modules       list[Module]   – ordered list of PKS modules
-        #
-        # Each Module has attributes:
-        #   .isLoading     bool           – True for loading / starter module
-        #   .domains       list[str]      – e.g. ["KS","AT","KR","ACP"]
-        #   .extender      str | None     – e.g. "malonyl-CoA"
-        #   .atSpecificity str | None     – AT domain substrate label
-        raw_designs = self._designPKS(
-            smiles,
-            similarityMetric=similarity,
-            numDesigns=max_designs,
+        raw_rounds = self._designPKS(
+            mol,
+            maxDesignsPerRound=max_designs,
+            similarity=similarity,
         )
 
-        # ---- Serialise ----------------------------------------------- #
-        results: list[dict] = []
-        for rank, design in enumerate(raw_designs[:max_designs], start=1):
-            modules_out = []
-            for mod in design.modules:
-                modules_out.append(
-                    {
-                        "starter":        getattr(mod, "isLoading", False),
-                        "domains":        list(getattr(mod, "domains", [])),
-                        "extender":       getattr(mod, "extender", None),
-                        "at_specificity": getattr(mod, "atSpecificity", None),
-                    }
-                )
+        all_designs = []
+        for rnd in raw_rounds:
+            for cluster, score, product_mol in rnd:
+                product_smi = self._MolToSmiles(product_mol) if product_mol else ""
+                modules_out = []
+                for mod in cluster.modules:
+                    domains_dict = {}
+                    raw_domains = getattr(mod, "domains", {})
+                    for domain_cls, domain_obj in raw_domains.items():
+                        domain_name = domain_cls.__name__ if hasattr(domain_cls, "__name__") else str(domain_cls)
+                        if hasattr(domain_obj, "design"):
+                            params = domain_obj.design()
+                            params.pop("active", None)
+                        elif isinstance(domain_obj, dict):
+                            params = dict(domain_obj)
+                        else:
+                            params = str(domain_obj)
+                        domains_dict[domain_name] = params
+                    modules_out.append({
+                        "loading": getattr(mod, "loading", False),
+                        "domains": domains_dict,
+                    })
 
-            product_smiles: str = getattr(design, "productSMILES", "")
-            results.append(
-                {
-                    "rank":           rank,
-                    "similarity":     round(float(design.similarity), 6),
-                    "product_smiles": product_smiles,
-                    "modules":        modules_out,
-                    "exact_match":    (product_smiles == smiles),
-                }
-            )
+                all_designs.append({
+                    "similarity": round(float(score), 6),
+                    "product_smiles": product_smi,
+                    "modules": modules_out,
+                    "exact_match": (product_smi == smiles),
+                })
+
+        all_designs.sort(key=lambda d: d["similarity"], reverse=True)
+        all_designs = all_designs[:max_designs]
+
+        results = []
+        for rank, design in enumerate(all_designs, start=1):
+            design["rank"] = rank
+            results.append(design)
 
         return results
 
 
-# --------------------------------------------------------------------------- #
-#  Module-level alias so pytest can import the function directly.              #
-# --------------------------------------------------------------------------- #
 _instance = Retrotide()
 try:
     _instance.initiate()

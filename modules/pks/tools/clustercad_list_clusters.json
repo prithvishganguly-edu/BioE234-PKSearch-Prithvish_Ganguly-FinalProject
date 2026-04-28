@@ -1,0 +1,62 @@
+{
+  "id": "org.bioe234.function.pks.clustercad_list_clusters.v1",
+  "name": "ClusterCAD List PKS Clusters",
+  "description": "Retrieve a list of PKS clusters from the ClusterCAD database, optionally filtering to reviewed clusters only.",
+  "type": "function",
+  "keywords": ["PKS", "polyketide synthase", "ClusterCAD", "clusters", "MIBiG"],
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "reviewed_only",
+      "type": "boolean",
+      "description": "If true, return only manually reviewed PKS clusters. If false, return all clusters including machine-annotated ones. Defaults to true.",
+      "optional": true
+    },
+    {
+      "name": "max_results",
+      "type": "integer",
+      "description": "Maximum number of clusters to return. Defaults to 20, maximum is 500.",
+      "optional": true
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "array",
+      "description": "List of PKS clusters, each with 'accession' (MIBiG accession string, e.g. 'BGC0000055') and 'description' (human-readable cluster name)."
+    }
+  ],
+
+  "examples": [
+    {
+      "input": { "reviewed_only": true, "max_results": 5 },
+      "output": {
+        "result": [
+          { "accession": "BGC0000055", "description": "Erythromycin" },
+          { "accession": "BGC0000026", "description": "Epothilone" }
+        ]
+      }
+    },
+    {
+      "input": { "reviewed_only": false, "max_results": 10 },
+      "output": {
+        "result": [
+          { "accession": "BGC0000055", "description": "Erythromycin" },
+          { "accession": "BGC0000031", "description": "FK506" }
+        ]
+      }
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/seq_basics/tools/clustercad_list_clusters.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+    "mcp_name": "clustercad_list_clusters",
+    "seq_params": []
+  }
+}

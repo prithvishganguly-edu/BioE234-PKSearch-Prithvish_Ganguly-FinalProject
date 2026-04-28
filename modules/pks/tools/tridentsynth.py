@@ -1,624 +1,737 @@
 from __future__ import annotations
 
-import json
 import re
 import time
-from dataclasses import dataclass
 from typing import Any, Optional
 from urllib.parse import urljoin
 
 import requests
-from bs4 import BeautifulSoup, Tag
-
-
-@dataclass
-class _FieldCandidate:
-    tag: Tag
-    name: str
-    field_type: str
-    context: str
-    value: str | None = None
+from bs4 import BeautifulSoup
 
 
 class TridentSynth:
     """
-    Description:
-        Submit a live TridentSynth job through the public TridentSynth web form,
-        then optionally poll the results page until completion.
+    Live TridentSynth runner.
 
-        This tool discovers the current live HTML form fields dynamically instead
-        of hard-coding field names, so it is more resilient to small frontend changes.
-
-    Input:
-        target_smiles (str): Single target-molecule SMILES string.
-        use_pks (bool, optional): Include PKS synthesis strategy. Default: True.
-        use_bio (bool, optional): Include Bio synthesis strategy. Default: False.
-        use_chem (bool, optional): Include Chem synthesis strategy. Default: False.
-        max_bio_steps (int, optional): Max biological steps. Allowed: 1-3.
-        max_chem_steps (int, optional): Max chemical steps. Allowed: 1-3.
-        pks_release_mechanism (str, optional): "thiolysis" or "cyclization".
-        pks_starters (list[str], optional): PKS starter substrates.
-        pks_extenders (list[str], optional): PKS extender substrates.
-        max_carbon (int, optional): Optional DORAnet max carbon filter.
-        max_nitrogen (int, optional): Optional DORAnet max nitrogen filter.
-        max_oxygen (int, optional): Optional DORAnet max oxygen filter.
-        auto_optimize_unspecified (bool, optional): Auto-fill omitted optional
-            settings with a compact exploratory configuration. Default: True.
-        wait_for_completion (bool, optional): Poll the results page until the
-            job finishes. Default: True.
-        poll_seconds (int, optional): Seconds between polling attempts. Default: 10.
-        timeout_seconds (int, optional): Maximum total polling time. Default: 300.
-        acknowledge_controlled_substance_warning (bool, optional): If the site
-            shows its controlled-substance acknowledgement screen, continue only
-            when this is True. Default: False.
-
-    Output:
-        dict: JSON-serializable summary containing the submitted query, parsed job
-        info, results URL, and parsed results if available.
+    Submits a job to the public TridentSynth site, waits for completion, parses the
+    best pathway, and returns pathway structures, PKS modules, reaction rules, and
+    other result information as text/JSON.
     """
 
     def initiate(self) -> None:
         self.base_url = "https://tridentsynth.lbl.gov/run_TridentSynth/"
-        self.default_headers = {
-            "User-Agent": "BioE234-TridentSynth-MCP/1.0 (+research use)",
+        self.headers = {
+            "User-Agent": "BioE234-TridentSynth-MCP/1.0"
         }
+
         self.allowed_release_mechanisms = {"thiolysis", "cyclization"}
-        self.allowed_starters = {
-            "malonyl-coa": "Malonyl-CoA",
-            "methylmalonyl-coa": "Methylmalonyl-CoA",
-            "allylmalonyl-coa": "Allylmalonyl-CoA",
-            "methoxymalonyl-coa": "Methoxymalonyl-CoA",
-            "hydroxymalonyl-coa": "Hydroxymalonyl-CoA",
+
+        self.starter_map = {
+            "malonyl-coa": "mal",
+            "malonyl coa": "mal",
+            "mal": "mal",
+            "methylmalonyl-coa": "mmal",
+            "methylmalonyl coa": "mmal",
+            "mmal": "mmal",
+            "allylmalonyl-coa": "allylmal",
+            "allylmalonyl coa": "allylmal",
+            "allylmal": "allylmal",
+            "methoxymalonyl-coa": "mxmal",
+            "methoxymalonyl coa": "mxmal",
+            "mxmal": "mxmal",
+            "hydroxymalonyl-coa": "hmal",
+            "hydroxymalonyl coa": "hmal",
+            "hmal": "hmal",
         }
-        self.allowed_extenders = {
-            "malonyl-coa": "Malonyl-CoA",
-            "methylmalonyl-coa": "Methylmalonyl-CoA",
-            "ethylmalonyl-coa": "Ethylmalonyl-CoA",
-            "methoxymalonyl-coa": "Methoxymalonyl-CoA",
-            "allylmalonyl-coa": "Allylmalonyl-CoA",
+
+        self.extender_map = {
+            "malonyl-coa": "mal",
+            "malonyl coa": "mal",
+            "mal": "mal",
+            "methylmalonyl-coa": "mmal",
+            "methylmalonyl coa": "mmal",
+            "mmal": "mmal",
+            "ethylmalonyl-coa": "emal",
+            "ethylmalonyl coa": "emal",
+            "emal": "emal",
+            "methoxymalonyl-coa": "mxmal",
+            "methoxymalonyl coa": "mxmal",
+            "mxmal": "mxmal",
+            "allylmalonyl-coa": "allylmal",
+            "allylmalonyl coa": "allylmal",
+            "allylmal": "allylmal",
         }
 
     def _session(self) -> requests.Session:
         session = requests.Session()
-        session.headers.update(self.default_headers)
+        session.headers.update(self.headers)
         return session
 
-    def _clean(self, text: str) -> str:
-        return re.sub(r"\s+", " ", text).strip().lower()
-
-    def _normalize_choice_list(
-        self,
-        values: Optional[list[str]],
-        allowed_map: dict[str, str],
-        field_name: str,
-    ) -> list[str]:
-        if not values:
-            return []
-
-        out: list[str] = []
-        seen: set[str] = set()
-        for value in values:
-            key = self._clean(str(value))
-            if key not in allowed_map:
-                valid = ", ".join(sorted(allowed_map.values()))
-                raise ValueError(f"Invalid {field_name}: {value!r}. Allowed values: {valid}")
-            canonical = allowed_map[key]
-            if canonical not in seen:
-                seen.add(canonical)
-                out.append(canonical)
-        return out
+    def _clean(self, value: Any) -> str:
+        return re.sub(r"\s+", " ", str(value)).strip().lower()
 
     def _validate_step_count(self, value: Optional[int], field_name: str) -> Optional[int]:
         if value is None:
             return None
         if value not in (1, 2, 3):
-            raise ValueError(f"{field_name} must be 1, 2, or 3 — got {value}")
+            raise ValueError(f"{field_name} must be 1, 2, or 3.")
         return value
 
     def _validate_atom_limit(self, value: Optional[int], field_name: str) -> Optional[int]:
         if value is None:
             return None
         if value < 0:
-            raise ValueError(f"{field_name} must be >= 0")
+            raise ValueError(f"{field_name} must be >= 0.")
         return value
 
+    def _normalize_choices(
+        self,
+        values: Optional[list[str]],
+        mapping: dict[str, str],
+        field_name: str,
+    ) -> list[str]:
+        if not values:
+            return []
+
+        normalized: list[str] = []
+        for raw in values:
+            key = self._clean(raw)
+            if key not in mapping:
+                allowed = ", ".join(sorted(mapping.keys()))
+                raise ValueError(f"Invalid {field_name}: {raw!r}. Allowed values include: {allowed}")
+
+            short_value = mapping[key]
+            if short_value not in normalized:
+                normalized.append(short_value)
+
+        return normalized
+
     def _infer_release_mechanism(self, target_smiles: str) -> str:
-        has_ring_digit = any(ch.isdigit() for ch in target_smiles)
-        has_o_or_n = any(ch in target_smiles for ch in ("O", "N", "o", "n"))
-        return "cyclization" if has_ring_digit and has_o_or_n else "thiolysis"
+        has_ring = any(ch.isdigit() for ch in target_smiles)
+        has_heteroatom = any(ch in target_smiles for ch in ["O", "N", "o", "n"])
+        return "cyclization" if has_ring and has_heteroatom else "thiolysis"
 
-    def _get_soup(self, session: requests.Session, url: str) -> BeautifulSoup:
-        response = session.get(url, timeout=60)
-        response.raise_for_status()
-        return BeautifulSoup(response.text, "html.parser")
+    def _payload_preview(self, payload: list[tuple[str, str]]) -> dict[str, Any]:
+        preview: dict[str, Any] = {}
 
-    def _choose_submission_form(self, soup: BeautifulSoup) -> Tag:
-        forms = soup.find_all("form")
-        if not forms:
-            raise RuntimeError("No HTML form was found on the TridentSynth page.")
+        for key, value in payload:
+            if key in preview:
+                if isinstance(preview[key], list):
+                    preview[key].append(value)
+                else:
+                    preview[key] = [preview[key], value]
+            else:
+                preview[key] = value
 
-        def score(form: Tag) -> int:
-            text = self._clean(form.get_text(" ", strip=True))
-            s = 0
-            if "run" in text:
-                s += 5
-            if "target molecule" in text or "smiles" in text:
-                s += 8
-            if "pks" in text:
-                s += 2
-            if form.find(["input", "select", "textarea"]):
-                s += 2
-            return s
+        return preview
 
-        return max(forms, key=score)
-
-    def _context_text(self, tag: Tag) -> str:
-        parts: list[str] = []
-        attrs = [
-            tag.get("name", ""),
-            tag.get("id", ""),
-            tag.get("placeholder", ""),
-            tag.get("aria-label", ""),
-            tag.get("title", ""),
-            tag.get("value", "") if tag.name == "input" else "",
-        ]
-        parts.extend(str(x) for x in attrs if x)
-
-        tag_id = tag.get("id")
-        if tag_id:
-            parent = tag.find_parent()
-            if parent is not None:
-                label = parent.find("label", attrs={"for": tag_id})
-                if label:
-                    parts.append(label.get_text(" ", strip=True))
-
-        parent = tag.find_parent(["label", "div", "td", "th", "p", "section"])
-        if parent:
-            parts.append(parent.get_text(" ", strip=True))
-
-        previous: list[str] = []
-        try:
-            prev_strings = tag.find_all_previous(string=True, limit=4)
-            for sib in reversed(prev_strings):
-                if sib is None:
-                    continue
-                txt = str(sib).strip()
-                if txt:
-                    previous.append(txt)
-        except Exception:
-            pass
-
-        parts.extend(previous)
-        return self._clean(" ".join(parts))
-
-    def _gather_fields(self, form: Tag) -> list[_FieldCandidate]:
-        fields: list[_FieldCandidate] = []
-        for tag in form.find_all(["input", "select", "textarea"]):
-            name = tag.get("name")
-            if not name:
-                continue
-            field_type = tag.get("type", tag.name).lower()
-            fields.append(
-                _FieldCandidate(
-                    tag=tag,
-                    name=name,
-                    field_type=field_type,
-                    context=self._context_text(tag),
-                    value=tag.get("value"),
-                )
-            )
-        return fields
-
-    def _find_best(
+    def _build_payload(
         self,
-        fields: list[_FieldCandidate],
-        must_have: list[str],
-        optional: Optional[list[str]] = None,
-        field_types: Optional[list[str]] = None,
-    ) -> Optional[_FieldCandidate]:
-        optional = optional or []
-        best: Optional[_FieldCandidate] = None
-        best_score = -10**9
-
-        for field in fields:
-            if field_types and field.field_type not in field_types:
-                continue
-            text = field.context
-            if not all(token in text for token in must_have):
-                continue
-            score = 0
-            for token in must_have:
-                if token in text:
-                    score += 8
-            for token in optional:
-                if token in text:
-                    score += 2
-            if field.field_type == "hidden":
-                score -= 10
-            if score > best_score:
-                best = field
-                best_score = score
-        return best
-
-    def _find_checkbox_by_value_or_context(
-        self,
-        fields: list[_FieldCandidate],
-        value_keywords: list[str],
-        group_keywords: Optional[list[str]] = None,
-    ) -> Optional[_FieldCandidate]:
-        group_keywords = group_keywords or []
-        best: Optional[_FieldCandidate] = None
-        best_score = -10**9
-
-        for field in fields:
-            if field.field_type not in {"checkbox", "radio"}:
-                continue
-            hay = self._clean(f"{field.context} {field.value or ''}")
-            if not all(tok in hay for tok in value_keywords):
-                continue
-            score = 0
-            for tok in value_keywords:
-                if tok in hay:
-                    score += 8
-            for tok in group_keywords:
-                if tok in hay:
-                    score += 2
-            if score > best_score:
-                best = field
-                best_score = score
-        return best
-
-    def _default_payload_items(self, form: Tag) -> list[tuple[str, str]]:
-        items: list[tuple[str, str]] = []
-
-        for tag in form.find_all(["input", "textarea", "select"]):
-            name = tag.get("name")
-            if not name:
-                continue
-
-            if tag.name == "input":
-                field_type = tag.get("type", "text").lower()
-
-                # Keep hidden fields like tokens / backend metadata.
-                if field_type == "hidden":
-                    items.append((name, tag.get("value", "")))
-
-                # Keep plain text-like defaults if the site expects them.
-                elif field_type in {"text", "search", "number"} and tag.get("value"):
-                    items.append((name, tag.get("value", "")))
-
-                # Skip checkbox/radio defaults so we do NOT accidentally submit
-                # pks/bio/chem selections the user did not ask for.
-                elif field_type in {"checkbox", "radio"}:
-                    continue
-
-            elif tag.name == "textarea":
-                if tag.text and tag.text.strip():
-                    items.append((name, tag.text.strip()))
-
-            elif tag.name == "select":
-                selected = tag.find("option", selected=True)
-                if selected is not None and selected.get("value") is not None:
-                    items.append((name, selected.get("value", "")))
-
-        return items
-
-    def _replace_single(self, items: list[tuple[str, str]], name: str, value: str) -> None:
-        items[:] = [(k, v) for (k, v) in items if k != name]
-        items.append((name, value))
-
-    def _append_multi(self, items: list[tuple[str, str]], name: str, value: str) -> None:
-        items.append((name, value))
-
-    def _set_strategy_checkboxes(
-        self,
-        items: list[tuple[str, str]],
-        fields: list[_FieldCandidate],
+        target_smiles: str,
         use_pks: bool,
         use_bio: bool,
         use_chem: bool,
-    ) -> dict[str, str]:
-        chosen: dict[str, str] = {}
-        for enabled, key in [(use_pks, "pks"), (use_bio, "bio"), (use_chem, "chem")]:
-            if not enabled:
-                continue
-            field = self._find_checkbox_by_value_or_context(fields, [key], ["strategy", "synthesis"])
-            if field is None:
-                raise RuntimeError(f"Could not find the {key.upper()} strategy field on the live TridentSynth form.")
-            self._append_multi(items, field.name, field.value or "on")
-            chosen[key] = field.value or "on"
-        return chosen
+        max_bio_steps: Optional[int],
+        max_chem_steps: Optional[int],
+        pks_release_mechanism: Optional[str],
+        pks_starters: Optional[list[str]],
+        pks_extenders: Optional[list[str]],
+        max_carbon: Optional[int],
+        max_nitrogen: Optional[int],
+        max_oxygen: Optional[int],
+        auto_optimize_unspecified: bool,
+    ) -> tuple[list[tuple[str, str]], dict[str, Any]]:
+        target_smiles = target_smiles.strip()
 
-    def _set_text_or_select(
-        self,
-        items: list[tuple[str, str]],
-        fields: list[_FieldCandidate],
-        value: Optional[Any],
-        must_have: list[str],
-        optional: Optional[list[str]] = None,
-        field_types: Optional[list[str]] = None,
-        required: bool = False,
-    ) -> Optional[str]:
-        if value is None:
-            return None
-        field = self._find_best(fields, must_have, optional=optional, field_types=field_types)
-        if field is None:
-            if required:
-                raise RuntimeError(f"Could not find form field for {' '.join(must_have)}")
-            return None
-        self._replace_single(items, field.name, str(value))
-        return field.name
+        if not target_smiles:
+            raise ValueError("target_smiles must not be empty.")
+        if "." in target_smiles:
+            raise ValueError("TridentSynth accepts one molecule at a time. Remove '.' from the SMILES.")
+        if not any([use_pks, use_bio, use_chem]):
+            raise ValueError("At least one synthesis strategy must be selected.")
 
-    def _set_checkbox_group(
-        self,
-        items: list[tuple[str, str]],
-        fields: list[_FieldCandidate],
-        selections: list[str],
-        group_keyword: str,
-    ) -> dict[str, list[str]]:
-        chosen: dict[str, list[str]] = {}
-        if not selections:
-            return chosen
+        max_bio_steps = self._validate_step_count(max_bio_steps, "max_bio_steps")
+        max_chem_steps = self._validate_step_count(max_chem_steps, "max_chem_steps")
+        max_carbon = self._validate_atom_limit(max_carbon, "max_carbon")
+        max_nitrogen = self._validate_atom_limit(max_nitrogen, "max_nitrogen")
+        max_oxygen = self._validate_atom_limit(max_oxygen, "max_oxygen")
 
-        matched_fields: list[_FieldCandidate] = []
-        for selection in selections:
-            normalized = self._clean(selection)
-            keywords = [normalized]
-            field = self._find_checkbox_by_value_or_context(fields, keywords, [group_keyword])
-            if field is None:
-                split_keywords = [tok for tok in re.split(r"[^a-z0-9]+", normalized) if tok]
-                field = self._find_checkbox_by_value_or_context(fields, split_keywords, [group_keyword])
-            if field is None:
-                raise RuntimeError(f"Could not find checkbox for {group_keyword} choice {selection!r}")
-            matched_fields.append(field)
+        starters = self._normalize_choices(pks_starters, self.starter_map, "pks_starters")
+        extenders = self._normalize_choices(pks_extenders, self.extender_map, "pks_extenders")
 
-        names = {field.name for field in matched_fields}
-        items[:] = [(k, v) for (k, v) in items if k not in names]
+        auto_filled: dict[str, Any] = {}
 
-        for field in matched_fields:
-            self._append_multi(items, field.name, field.value or "on")
-            chosen.setdefault(field.name, []).append(field.value or "on")
+        if auto_optimize_unspecified:
+            if max_bio_steps is None:
+                max_bio_steps = 1
+                auto_filled["max_bio_steps"] = 1
 
-        return chosen
+            if max_chem_steps is None:
+                max_chem_steps = 1
+                auto_filled["max_chem_steps"] = 1
 
-    def _submit_form(
+            if use_pks and pks_release_mechanism is None:
+                pks_release_mechanism = self._infer_release_mechanism(target_smiles)
+                auto_filled["pks_release_mechanism"] = pks_release_mechanism
+
+            if use_pks and not starters:
+                starters = ["mal", "mmal"]
+                auto_filled["pks_starters"] = starters
+
+            if use_pks and not extenders:
+                extenders = ["mal", "mmal"]
+                auto_filled["pks_extenders"] = extenders
+
+        if pks_release_mechanism is not None:
+            pks_release_mechanism = self._clean(pks_release_mechanism)
+            if pks_release_mechanism not in self.allowed_release_mechanisms:
+                raise ValueError("pks_release_mechanism must be 'thiolysis' or 'cyclization'.")
+
+        payload: list[tuple[str, str]] = []
+
+        payload.append(("smiles", target_smiles))
+
+        if use_pks:
+            payload.append(("synthesisStrategy_pks", "on"))
+        if use_bio:
+            payload.append(("synthesisStrategy_bio", "on"))
+        if use_chem:
+            payload.append(("synthesisStrategy_chem", "on"))
+
+        # Exact live TridentSynth field names from browser Form Data.
+        payload.append(("rangebio", str(max_bio_steps if max_bio_steps is not None else 1)))
+        payload.append(("rangechem", str(max_chem_steps if max_chem_steps is not None else 1)))
+
+        if use_pks:
+            payload.append(("releaseMechanism", pks_release_mechanism or "thiolysis"))
+
+            for starter in starters:
+                payload.append(("pksStarters[]", starter))
+
+            for extender in extenders:
+                payload.append(("pksExtenders[]", extender))
+
+        # Live form includes these even when blank.
+        payload.append(("maxAtomsC", "" if max_carbon is None else str(max_carbon)))
+        payload.append(("maxAtomsN", "" if max_nitrogen is None else str(max_nitrogen)))
+        payload.append(("maxAtomsO", "" if max_oxygen is None else str(max_oxygen)))
+
+        normalized_query = {
+            "target_smiles": target_smiles,
+            "use_pks": use_pks,
+            "use_bio": use_bio,
+            "use_chem": use_chem,
+            "max_bio_steps": max_bio_steps,
+            "max_chem_steps": max_chem_steps,
+            "pks_release_mechanism": pks_release_mechanism,
+            "pks_starters": starters,
+            "pks_extenders": extenders,
+            "max_carbon": max_carbon,
+            "max_nitrogen": max_nitrogen,
+            "max_oxygen": max_oxygen,
+            "auto_filled": auto_filled,
+            "payload_preview": self._payload_preview(payload),
+        }
+
+        return payload, normalized_query
+
+    def _submit_payload(
         self,
         session: requests.Session,
-        base_soup: BeautifulSoup,
-        items: list[tuple[str, str]],
+        payload: list[tuple[str, str]],
+        acknowledge_controlled_substance_warning: bool,
     ) -> requests.Response:
-        form = self._choose_submission_form(base_soup)
-        action = form.get("action") or self.base_url
-        method = (form.get("method") or "post").lower()
-        url = urljoin(self.base_url, action)
+        session.get(self.base_url, timeout=60)
+        response = session.post(self.base_url, data=payload, timeout=120)
 
-        if method == "get":
-            response = session.get(url, params=items, timeout=120)
-        else:
-            response = session.post(url, data=items, timeout=120)
+        if response.ok and "Controlled Substance Warning" in response.text:
+            if not acknowledge_controlled_substance_warning:
+                raise RuntimeError(
+                    "TridentSynth returned its controlled-substance warning. "
+                    "The tool stopped because acknowledge_controlled_substance_warning=False."
+                )
+
+            warning_soup = BeautifulSoup(response.text, "html.parser")
+            warning_form = warning_soup.find("form")
+            if warning_form is None:
+                raise RuntimeError("Controlled-substance warning appeared, but no continue form was found.")
+
+            warning_payload: list[tuple[str, str]] = []
+            for tag in warning_form.find_all(["input", "button"]):
+                name = tag.get("name")
+                value = tag.get("value", "")
+                if name:
+                    warning_payload.append((name, value))
+
+            action = warning_form.get("action") or response.url
+            method = (warning_form.get("method") or "post").lower()
+            continue_url = urljoin(response.url, action)
+
+            if method == "get":
+                response = session.get(continue_url, params=warning_payload, timeout=120)
+            else:
+                response = session.post(continue_url, data=warning_payload, timeout=120)
 
         if not response.ok:
-            payload_preview = {}
-            for k, v in items:
-                if k in payload_preview:
-                    if isinstance(payload_preview[k], list):
-                        payload_preview[k].append(v)
-                    else:
-                        payload_preview[k] = [payload_preview[k], v]
-                else:
-                    payload_preview[k] = v
-
-            body_excerpt = response.text[:2000] if response.text else ""
             raise RuntimeError(
-                f"TridentSynth submission failed with HTTP {response.status_code} for {url}\n"
-                f"Payload preview: {payload_preview}\n"
-                f"Response body excerpt:\n{body_excerpt}"
+                f"TridentSynth submission failed with HTTP {response.status_code}.\n"
+                f"Payload preview: {self._payload_preview(payload)}\n"
+                f"Response excerpt: {response.text[:1500]}"
             )
 
         return response
 
-    def _handle_controlled_substance_warning(
-        self,
-        session: requests.Session,
-        response: requests.Response,
-        acknowledge: bool,
-    ) -> Optional[requests.Response]:
-        soup = BeautifulSoup(response.text, "html.parser")
-        text = soup.get_text(" ", strip=True)
+    def _extract_task_id(self, response: requests.Response) -> Optional[str]:
+        try:
+            payload = response.json()
+            if isinstance(payload, dict):
+                return payload.get("task_id") or payload.get("job_id")
+        except Exception:
+            pass
 
-        if "Controlled Substance Warning" not in text:
-            return response
+        text = response.text
+        match = re.search(r'"(?:task_id|job_id)"\s*:\s*"([^"]+)"', text)
+        if match:
+            return match.group(1)
 
-        if not acknowledge:
-            return None
+        soup = BeautifulSoup(text, "html.parser")
+        page_text = soup.get_text("\n", strip=True)
+        lines = [line.strip() for line in page_text.splitlines() if line.strip()]
 
-        forms = soup.find_all("form")
-        for form in forms:
-            form_text = self._clean(form.get_text(" ", strip=True))
-            if "continue anyway" not in form_text:
-                continue
+        for i, line in enumerate(lines):
+            if line.lower().rstrip(":") in {"job id", "task id"} and i + 1 < len(lines):
+                return lines[i + 1]
 
-            items = self._default_payload_items(form)
+        return None
 
-            buttons = form.find_all(["button", "input"])
-            for button in buttons:
-                button_text = self._clean(button.get_text(" ", strip=True) or button.get("value", ""))
-                if "continue" in button_text and button.get("name"):
-                    items.append((button["name"], button.get("value", "Continue Anyway")))
-                    break
-
-            action = urljoin(response.url, form.get("action") or response.url)
-            method = (form.get("method") or "post").lower()
-
-            if method == "get":
-                next_response = session.get(action, params=items, timeout=120)
-            else:
-                next_response = session.post(action, data=items, timeout=120)
-
-            next_response.raise_for_status()
-            return next_response
-
-        return response
-
-    def _extract_job_info(
-        self,
-        soup: BeautifulSoup,
-        current_url: str,
-        response_text: str | None = None,
-    ) -> dict[str, Any]:
-        job_id = None
-        results_link = None
-        status_hint = None
-
-        if response_text:
-            try:
-                payload = json.loads(response_text)
-                if isinstance(payload, dict):
-                    job_id = payload.get("task_id") or payload.get("job_id")
-                    results_link = payload.get("results_url") or payload.get("results_link")
-                    status_hint = payload.get("status")
-            except Exception:
-                pass
-
-        text = soup.get_text("\n", strip=True)
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-
-        if job_id is None:
-            for idx, line in enumerate(lines):
-                low = line.lower().rstrip(":")
-                if low == "job id" and idx + 1 < len(lines):
-                    job_id = lines[idx + 1]
-                elif low == "job status" and idx + 1 < len(lines):
-                    status_hint = lines[idx + 1]
-
-        if results_link is None:
-            for a in soup.find_all("a", href=True):
-                href = a["href"]
-                full = urljoin(current_url, href)
-                if "/run_TridentSynth/" not in full:
-                    continue
-                if any(bad in full for bad in ["tutorial", "about", "publications", "common_precursors"]):
-                    continue
-                if full.rstrip("/") != self.base_url.rstrip("/"):
-                    results_link = full
-                    break
-
-        return {
-            "job_id": job_id,
-            "results_url": results_link,
-            "submission_status_hint": status_hint,
-            "raw_page_excerpt": (response_text or text)[:1500],
-        }
-
-    def _resolve_results_url_from_job_id(self, session: requests.Session, job_id: str) -> Optional[str]:
-        candidates = [
-            urljoin(self.base_url, f"{job_id}/"),
-            urljoin(self.base_url, f"{job_id}"),
-            urljoin(self.base_url, f"results/{job_id}/"),
-            urljoin(self.base_url, f"results/{job_id}"),
-            urljoin(self.base_url, f"job/{job_id}/"),
-            urljoin(self.base_url, f"job/{job_id}"),
-            urljoin(self.base_url, f"status/{job_id}/"),
-            urljoin(self.base_url, f"status/{job_id}"),
+    def _candidate_result_urls(self, task_id: str) -> list[str]:
+        return [
+            urljoin(self.base_url, f"results/{task_id}/"),
         ]
 
-        for url in candidates:
-            try:
-                r = session.get(url, timeout=60)
-                if r.status_code != 200:
-                    continue
-                text = r.text
-                if job_id in text or "Task ID" in text or "TridentSynth job summary" in text:
-                    return url
-            except Exception:
-                continue
+    def _fetch_result_page(
+        self,
+        session: requests.Session,
+        task_id: str,
+        payload: list[tuple[str, str]],
+    ) -> tuple[Optional[str], Optional[str]]:
+        url = urljoin(self.base_url, f"results/{task_id}/")
 
-        return None
+        try:
+            response = session.get(
+                url,
+                timeout=30,
+                headers={
+                    "Referer": self.base_url,
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                },
+            )
+        except Exception:
+            return None, None
 
-    def _extract_summary_value(self, lines: list[str], label: str) -> Optional[str]:
-        for idx, line in enumerate(lines):
-            if line.strip().lower() == label.lower() and idx + 1 < len(lines):
-                return lines[idx + 1]
-        return None
+        if response.status_code != 200:
+            return None, None
 
-    def _parse_results(self, soup: BeautifulSoup, url: str) -> dict[str, Any]:
-        text = soup.get_text("\n", strip=True)
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        text = response.text
 
-        status_message = None
-        for phrase in [
-            "Pathways to target found!",
-            "The target can be synthesized by PKS assembly alone",
-            "Closest reachable product",
+        if (
+            task_id in text
+            or "TridentSynth job summary" in text
+            or "Pathways to target found" in text
+            or "Job submitted. Please wait" in text
+            or "PKS product" in text
+            or "Post-PKS product" in text
+            or "Synthesis parameters" in text
+            or "Full pathway design" in text
+        ):
+            return url, text
+
+        return None, None
+
+    def _is_result_complete(self, html: str) -> bool:
+        text = BeautifulSoup(html, "html.parser").get_text(" ", strip=True).lower()
+
+        if "job submitted. please wait" in text:
+            return False
+        if "pending" in text or "running" in text or "queued" in text:
+            return False
+
+        completion_phrases = [
+            "pathways to target found",
             "closest reachable product",
-            "Job submitted. Please wait.",
-        ]:
-            if phrase in text:
-                status_message = phrase
-                break
+            "the target can be synthesized by pks assembly alone",
+            "full pathway design",
+            "pks product",
+            "post-pks product",
+            "synthesis parameters",
+        ]
 
-        summary = {
-            "task_id": self._extract_summary_value(lines, "Task ID"),
-            "target_smiles": self._extract_summary_value(lines, "Target SMILES"),
-            "target_name": self._extract_summary_value(lines, "Target Name"),
-            "pathway_sequence": self._extract_summary_value(lines, "Pathway Sequence"),
-            "pks_termination_step": self._extract_summary_value(lines, "PKS Termination Step"),
-            "pks_extenders": self._extract_summary_value(lines, "PKS Extenders"),
-            "pks_starters": self._extract_summary_value(lines, "PKS Starters"),
-            "bio_steps": self._extract_summary_value(lines, "# Bio Steps"),
-            "chem_steps": self._extract_summary_value(lines, "# Chem Steps"),
-            "job_id": self._extract_summary_value(lines, "Job Id"),
-        }
+        return any(phrase in text for phrase in completion_phrases)
 
-        top_design: dict[str, Any] = {
-            "pks_product": self._extract_summary_value(lines, "PKS product"),
-            "post_pks_product": self._extract_summary_value(lines, "Post-PKS product"),
-        }
+    def _text_lines(self, soup: BeautifulSoup) -> list[str]:
+        text = soup.get_text("\n", strip=True)
+        return [line.strip() for line in text.splitlines() if line.strip()]
 
-        similarity_values = []
-        for idx, line in enumerate(lines):
-            if line.lower().startswith("similarity to target") and idx + 1 < len(lines):
-                similarity_values.append(lines[idx + 1])
+    def _value_after_label(self, lines: list[str], label: str) -> Optional[str]:
+        label_clean = self._clean(label).rstrip(":")
 
-        if similarity_values:
-            top_design["pks_similarity_to_target"] = similarity_values[0]
-        if len(similarity_values) > 1:
-            top_design["post_pks_similarity_to_target"] = similarity_values[1]
+        for i, line in enumerate(lines):
+            if self._clean(line).rstrip(":") == label_clean:
+                if i + 1 < len(lines):
+                    return lines[i + 1].strip("` ")
 
-        net_feasibility = self._extract_summary_value(lines, "Net feasibility")
-        if net_feasibility is not None:
-            top_design["top_pathway_net_feasibility"] = net_feasibility
+        return None
 
-        rxn_smiles: list[str] = []
-        collect = False
-        for line in lines:
-            if line == "Reactions (SMILES)":
-                collect = True
+    def _looks_like_smiles(self, value: str) -> bool:
+        if not value:
+            return False
+
+        value = value.strip("` ").strip()
+
+        if len(value) < 2:
+            return False
+
+        if value.lower() in {"i", "info", "none", "null", "nan"}:
+            return False
+
+        return bool(re.search(r"[CONFPSIBrcnos\[\]\(\)=#@+\-\\/0-9]", value))
+
+    def _unique_ordered(self, values: list[Optional[str]]) -> list[str]:
+        out: list[str] = []
+
+        for value in values:
+            if not value:
                 continue
-            if collect:
-                if line.startswith("Reaction rules") or line.startswith("Step feasibilities"):
-                    break
-                if ">>" in line:
-                    rxn_smiles.append(line.strip("•* ").strip())
 
-        if rxn_smiles:
-            top_design["top_pathway_reaction_smiles"] = rxn_smiles
+            value = value.strip("` ").strip()
+
+            if not self._looks_like_smiles(value):
+                continue
+
+            if value not in out:
+                out.append(value)
+
+        return out
+
+    def _extract_best_pathway_block(self, text: str) -> str:
+        patterns = [
+            r"Full pathway design #1(.*?)(Full pathway design #2|$)",
+            r"Pathway 1(.*?)(Pathway 2|$)",
+            r"Best pathway(.*?)(Full pathway design #2|Pathway 2|$)",
+            r"Top pathway(.*?)(Full pathway design #2|Pathway 2|$)",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+            if match:
+                return match.group(1)
+
+        return text
+
+    def _extract_product_smiles(self, text: str, label: str) -> Optional[str]:
+        pattern = rf"{re.escape(label)}.*?`([^`]+)`"
+        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        if match:
+            value = match.group(1).strip()
+            return value if self._looks_like_smiles(value) else None
+
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        label_clean = self._clean(label)
+
+        for i, line in enumerate(lines):
+            if self._clean(line).rstrip(":") == label_clean.rstrip(":"):
+                if i + 1 < len(lines):
+                    value = lines[i + 1].strip("` ")
+                    return value if self._looks_like_smiles(value) else None
+
+        return None
+
+    def _extract_float_after_label(self, text: str, label: str) -> Optional[float]:
+        pattern = rf"{re.escape(label)}.*?([0-9]+(?:\.[0-9]+)?)"
+        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            return None
+
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+
+    def _extract_reaction_smiles(self, text: str) -> list[str]:
+        cleaned: list[str] = []
+
+        section_match = re.search(
+            r"Reactions \(SMILES\)(.*?)(Reaction rules|Step feasibilities|Net feasibility|Full pathway design #2|Pathway 2|$)",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+        search_text = section_match.group(1) if section_match else text
+
+        candidates = re.findall(r"`([^`]*>>[^`]*)`", search_text)
+
+        if not candidates:
+            candidates = re.findall(
+                r"([A-Za-z0-9@\+\-\[\]\(\)=#$\\/%\.:]+>>[A-Za-z0-9@\+\-\[\]\(\)=#$\\/%\.:]+)",
+                search_text,
+            )
+
+        for item in candidates:
+            item = item.strip("` ").strip()
+            if ">>" not in item:
+                continue
+            if item not in cleaned:
+                cleaned.append(item)
+
+        return cleaned
+
+    def _reaction_to_structures(self, reaction_smiles: str) -> dict[str, list[str]]:
+        if ">>" not in reaction_smiles:
+            return {"reactants": [], "products": []}
+
+        left, right = reaction_smiles.split(">>", 1)
 
         return {
-            "results_url": url,
-            "status_message": status_message,
-            "job_summary": summary,
-            "top_design": top_design,
-            "raw_text_excerpt": text[:4000],
+            "reactants": [s for s in left.split(".") if self._looks_like_smiles(s)],
+            "products": [s for s in right.split(".") if self._looks_like_smiles(s)],
         }
 
-    def _is_complete(self, parsed_results: dict[str, Any]) -> bool:
-        msg = (parsed_results.get("status_message") or "").lower()
-        if not msg:
-            return False
-        if "please wait" in msg:
-            return False
-        return True
+    def _extract_pks_modules(self, text: str) -> list[dict[str, Any]]:
+        modules: list[dict[str, Any]] = []
+
+        # Only parse before downstream post-PKS pathway sections.
+        pre_pathway_text = re.split(
+            r"Post-PKS pathways|Pathway 1|Reaction rules|Reaction enthalpies",
+            text,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+
+        pattern = re.compile(
+            r"MODULE\s+(\d+)\s+\((.*?)\)(.*?)(?=MODULE\s+\d+\s+\(|Domain legend|Post-PKS pathways|$)",
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+        seen_module_numbers: set[int] = set()
+
+        for match in pattern.finditer(pre_pathway_text):
+            module_number = int(match.group(1))
+
+            # If Module 1, 2, etc. appears again, the page has moved to another candidate design.
+            # Stop so we only return the first/best PKS module set.
+            if module_number in seen_module_numbers:
+                break
+
+            seen_module_numbers.add(module_number)
+
+            module_type = re.sub(r"\s+", " ", match.group(2)).strip()
+            module_body = match.group(3)
+
+            domains: list[dict[str, Optional[str]]] = []
+
+            domain_candidates = re.findall(
+                r"\b(KSq|KS|AT|KR|DH|ER|ACP)\b(?:\s*\(substrate:\s*([^)]+)\))?",
+                module_body,
+                flags=re.IGNORECASE,
+            )
+
+            for domain, substrate in domain_candidates:
+                canonical_domain = "KSq" if domain.lower() == "ksq" else domain.upper()
+                clean_substrate = substrate.strip() if substrate else None
+
+                domains.append(
+                    {
+                        "domain": canonical_domain,
+                        "substrate": clean_substrate,
+                    }
+                )
+
+            domain_text_parts = []
+            for item in domains:
+                if item["substrate"]:
+                    domain_text_parts.append(f"{item['domain']} substrate {item['substrate']}")
+                else:
+                    domain_text_parts.append(str(item["domain"]))
+
+            modules.append(
+                {
+                    "module_number": module_number,
+                    "module_type": module_type,
+                    "domains": domains,
+                    "text_summary": f"Module {module_number} ({module_type}): " + ", ".join(domain_text_parts),
+                }
+            )
+
+        return modules
+
+    def _extract_domain_legend(self, text: str) -> Optional[str]:
+        match = re.search(
+            r"Domain legend\s*(.*?)(Post-PKS pathways|Pathway 1|$)",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not match:
+            return None
+
+        legend = re.sub(r"\s+", " ", match.group(1)).strip()
+        return legend or None
+
+    def _extract_reaction_rule_names(self, text: str) -> list[str]:
+        match = re.search(
+            r"Reaction rules\s*(.*?)(Reaction enthalpies|Step feasibilities|Net feasibility|Full pathway design #2|Pathway 2|$)",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not match:
+            return []
+
+        section = match.group(1)
+        lines = [line.strip() for line in section.splitlines() if line.strip()]
+
+        cleaned: list[str] = []
+        for line in lines:
+            if line.lower() in {"reaction rules", "none"}:
+                continue
+            if line not in cleaned:
+                cleaned.append(line)
+
+        return cleaned
+
+    def _extract_reaction_enthalpies(self, text: str) -> list[str]:
+        match = re.search(
+            r"Reaction enthalpies\s*\(kcal/mol\)\s*(.*?)(Step feasibilities|Net feasibility|Full pathway design #2|Pathway 2|$)",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not match:
+            return []
+
+        section = match.group(1)
+        enthalpies = re.findall(r"-?\d+(?:\.\d+)?\s*kcal/mol", section)
+
+        return list(dict.fromkeys(enthalpies))
+
+    def _parse_result_page(self, html: str, task_id: Optional[str]) -> dict[str, Any]:
+        soup = BeautifulSoup(html, "html.parser")
+        lines = self._text_lines(soup)
+        full_text = soup.get_text("\n", strip=True)
+        best_block = self._extract_best_pathway_block(full_text)
+
+        target_smiles = self._value_after_label(lines, "Target SMILES")
+        target_name = self._value_after_label(lines, "Target Name")
+        pathway_sequence = self._value_after_label(lines, "Pathway Sequence")
+        pks_termination_step = self._value_after_label(lines, "PKS Termination Step")
+        pks_extenders = self._value_after_label(lines, "PKS Extenders")
+        pks_starters = self._value_after_label(lines, "PKS Starters")
+        bio_steps = self._value_after_label(lines, "# Bio Steps")
+        chem_steps = self._value_after_label(lines, "# Chem Steps")
+        job_id = self._value_after_label(lines, "Job Id") or task_id
+
+        pks_product = self._extract_product_smiles(best_block, "PKS product")
+        post_pks_product = self._extract_product_smiles(best_block, "Post-PKS product")
+
+        similarity_matches = re.findall(
+            r"similarity to target.*?([0-9]+(?:\.[0-9]+)?)",
+            best_block,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+        pks_similarity = float(similarity_matches[0]) if len(similarity_matches) >= 1 else None
+        post_pks_similarity = float(similarity_matches[1]) if len(similarity_matches) >= 2 else None
+
+        net_feasibility = self._extract_float_after_label(best_block, "Net feasibility")
+
+        reaction_smiles = self._extract_reaction_smiles(best_block)
+
+        # Fallback safety: for pages where pathway sections are not clearly separated,
+        # only keep the first/top reaction so alternative reactions do not flood output.
+        if len(reaction_smiles) > 1:
+            reaction_smiles = reaction_smiles[:1]
+
+        reaction_structures = [self._reaction_to_structures(rxn) for rxn in reaction_smiles]
+
+        reaction_rule_ids = self._unique_ordered(re.findall(r"rule\d+_\d+", best_block))
+        reaction_rule_names = self._extract_reaction_rule_names(best_block)
+        reaction_enthalpies = self._extract_reaction_enthalpies(best_block)
+
+        pks_modules = self._extract_pks_modules(full_text)
+        domain_legend = self._extract_domain_legend(full_text)
+
+        step_feasibilities: list[float] = []
+        step_section = re.search(
+            r"Step feasibilities(.*?)(Pathway \d+|Full pathway design #\d+|$)",
+            best_block,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if step_section:
+            for raw in re.findall(r"(?<!rule)(?<!\d)(0\.\d+|1\.0+|1)(?!\d)", step_section.group(1)):
+                try:
+                    step_feasibilities.append(float(raw))
+                except ValueError:
+                    pass
+
+        structure_values: list[Optional[str]] = [pks_product]
+
+        for rxn_struct in reaction_structures:
+            structure_values.extend(rxn_struct["reactants"])
+            structure_values.extend(rxn_struct["products"])
+
+        structure_values.append(post_pks_product)
+        structure_values.append(target_smiles)
+
+        pathway_structures_smiles = self._unique_ordered(structure_values)
+
+        if "Pathways to target found!" in full_text:
+            status_message = "Pathways to target found."
+        elif "Closest reachable product" in full_text or "closest reachable product" in full_text:
+            status_message = "Exact target not reached; closest reachable product shown."
+        elif "The target can be synthesized by PKS assembly alone" in full_text:
+            status_message = "Target can be synthesized by PKS assembly alone."
+        elif "Job submitted. Please wait" in full_text:
+            status_message = "Job still running."
+        else:
+            status_message = "Result page parsed."
+
+        return {
+            "task_id": job_id,
+            "status_message": status_message,
+            "synthesis_parameters": {
+                "target_smiles": target_smiles,
+                "target_name": target_name,
+                "pathway_sequence": pathway_sequence,
+                "pks_termination_step": pks_termination_step,
+                "pks_extenders": pks_extenders,
+                "pks_starters": pks_starters,
+                "bio_steps": bio_steps,
+                "chem_steps": chem_steps,
+            },
+            "pks_modules": pks_modules,
+            "domain_legend": domain_legend,
+            "best_pathway": {
+                "pks_product_smiles": pks_product,
+                "pks_similarity_to_target": pks_similarity,
+                "post_pks_product_smiles": post_pks_product,
+                "post_pks_similarity_to_target": post_pks_similarity,
+                "net_feasibility": net_feasibility,
+                "reaction_smiles": reaction_smiles,
+                "reaction_structures": reaction_structures,
+                "reaction_rule_ids": reaction_rule_ids,
+                "reaction_rule_names": reaction_rule_names,
+                "reaction_enthalpies": reaction_enthalpies,
+                "step_feasibilities": step_feasibilities,
+                "pathway_structures_smiles": pathway_structures_smiles,
+            },
+        }
+
+    def _add_selected_steps(self, parsed: dict[str, Any], submitted_query: dict[str, Any]) -> dict[str, Any]:
+        params = parsed.get("synthesis_parameters", {})
+
+        parsed["selected_steps"] = {
+            "bio_steps": params.get("bio_steps") if submitted_query.get("use_bio") else None,
+            "chem_steps": params.get("chem_steps") if submitted_query.get("use_chem") else None,
+        }
+
+        return parsed
 
     def run(
         self,
@@ -636,215 +749,103 @@ class TridentSynth:
         max_oxygen: Optional[int] = None,
         auto_optimize_unspecified: bool = True,
         wait_for_completion: bool = True,
-        poll_seconds: int = 10,
-        timeout_seconds: int = 300,
+        timeout_seconds: int = 600,
+        poll_seconds: int = 5,
         acknowledge_controlled_substance_warning: bool = False,
     ) -> dict[str, Any]:
-        target_smiles = target_smiles.strip()
-        if not target_smiles:
-            raise ValueError("target_smiles must not be empty")
-        if "." in target_smiles:
-            raise ValueError(
-                "TridentSynth accepts one molecule at a time. Remove '.' and submit a single target molecule."
-            )
-        if not any((use_pks, use_bio, use_chem)):
-            raise ValueError("At least one synthesis strategy must be selected: use_pks, use_bio, or use_chem")
-
-        max_bio_steps = self._validate_step_count(max_bio_steps, "max_bio_steps")
-        max_chem_steps = self._validate_step_count(max_chem_steps, "max_chem_steps")
-        max_carbon = self._validate_atom_limit(max_carbon, "max_carbon")
-        max_nitrogen = self._validate_atom_limit(max_nitrogen, "max_nitrogen")
-        max_oxygen = self._validate_atom_limit(max_oxygen, "max_oxygen")
-
-        starters = self._normalize_choice_list(pks_starters, self.allowed_starters, "pks_starters")
-        extenders = self._normalize_choice_list(pks_extenders, self.allowed_extenders, "pks_extenders")
-
-        auto_filled: dict[str, Any] = {}
-        if auto_optimize_unspecified:
-            if use_bio and max_bio_steps is None:
-                max_bio_steps = 1
-                auto_filled["max_bio_steps"] = 1
-            if use_chem and max_chem_steps is None:
-                max_chem_steps = 1
-                auto_filled["max_chem_steps"] = 1
-            if use_pks and pks_release_mechanism is None:
-                pks_release_mechanism = self._infer_release_mechanism(target_smiles)
-                auto_filled["pks_release_mechanism"] = pks_release_mechanism
-
-        if pks_release_mechanism is not None:
-            pks_release_mechanism = self._clean(pks_release_mechanism)
-            if pks_release_mechanism not in self.allowed_release_mechanisms:
-                allowed = ", ".join(sorted(self.allowed_release_mechanisms))
-                raise ValueError(
-                    f"Invalid pks_release_mechanism: {pks_release_mechanism!r}. Allowed values: {allowed}"
-                )
-
         session = self._session()
-        base_soup = self._get_soup(session, self.base_url)
-        form = self._choose_submission_form(base_soup)
-        fields = self._gather_fields(form)
-        items = self._default_payload_items(form)
 
-        target_field = (
-            self._find_best(fields, ["target", "molecule"], ["smiles"], ["text", "search", "textarea"])
-            or self._find_best(fields, ["smiles"], ["target"], ["text", "search", "textarea"])
-            or self._find_best(fields, ["molecule"], ["target"], ["text", "search", "textarea"])
-        )
-        if target_field is None:
-            raise RuntimeError("Could not find the target SMILES field on the live TridentSynth form.")
-        self._replace_single(items, target_field.name, target_smiles)
-
-        strategy_fields = self._set_strategy_checkboxes(items, fields, use_pks, use_bio, use_chem)
-
-        self._set_text_or_select(
-            items, fields, max_bio_steps, ["biological", "steps"], ["bio"], ["select", "number", "text"]
-        )
-        self._set_text_or_select(
-            items, fields, max_chem_steps, ["chemical", "steps"], ["chem"], ["select", "number", "text"]
-        )
-        self._set_text_or_select(
-            items,
-            fields,
-            pks_release_mechanism,
-            ["release", "mechanism"],
-            ["termination", "pks"],
-            ["select", "radio", "text"],
+        payload, normalized_query = self._build_payload(
+            target_smiles=target_smiles,
+            use_pks=use_pks,
+            use_bio=use_bio,
+            use_chem=use_chem,
+            max_bio_steps=max_bio_steps,
+            max_chem_steps=max_chem_steps,
+            pks_release_mechanism=pks_release_mechanism,
+            pks_starters=pks_starters,
+            pks_extenders=pks_extenders,
+            max_carbon=max_carbon,
+            max_nitrogen=max_nitrogen,
+            max_oxygen=max_oxygen,
+            auto_optimize_unspecified=auto_optimize_unspecified,
         )
 
-        starter_fields: dict[str, Any] = {}
-        extender_fields: dict[str, Any] = {}
+        submit_response = self._submit_payload(
+            session=session,
+            payload=payload,
+            acknowledge_controlled_substance_warning=acknowledge_controlled_substance_warning,
+        )
 
-        if starters:
-            try:
-                starter_fields = self._set_checkbox_group(items, fields, starters, "starter")
-            except RuntimeError:
-                starter_fields = {
-                    "warning": [
-                        "Starter controls not found on live form; skipping explicit starter selection and using site defaults."
-                    ]
+        task_id = self._extract_task_id(submit_response)
+
+        if not task_id:
+            if self._is_result_complete(submit_response.text):
+                parsed = self._add_selected_steps(
+                    self._parse_result_page(submit_response.text, task_id=None),
+                    normalized_query,
+                )
+                return {
+                    "ok": True,
+                    "status": "completed",
+                    "submitted_query": normalized_query,
+                    "result": parsed,
                 }
 
-        if extenders:
-            try:
-                extender_fields = self._set_checkbox_group(items, fields, extenders, "extender")
-            except RuntimeError:
-                extender_fields = {
-                    "warning": [
-                        "Extender controls not found on live form; skipping explicit extender selection and using site defaults."
-                    ]
-                }
+            raise RuntimeError(
+                "TridentSynth submission succeeded, but no task_id or result page could be parsed.\n"
+                f"Payload preview: {self._payload_preview(payload)}\n"
+                f"Response excerpt: {submit_response.text[:1500]}"
+            )
 
-        self._set_text_or_select(items, fields, max_carbon, ["carbon"], ["max", "atom"], ["select", "number", "text"])
-        self._set_text_or_select(
-            items, fields, max_nitrogen, ["nitrogen"], ["max", "atom"], ["select", "number", "text"]
-        )
-        self._set_text_or_select(items, fields, max_oxygen, ["oxygen"], ["max", "atom"], ["select", "number", "text"])
-
-        submit_response = self._submit_form(session, base_soup, items)
-        submit_response = self._handle_controlled_substance_warning(
-            session,
-            submit_response,
-            acknowledge=acknowledge_controlled_substance_warning,
-        )
-
-        if submit_response is None:
+        if not wait_for_completion:
             return {
-                "ok": False,
-                "tool": "TridentSynth",
-                "submission_url": self.base_url,
-                "warning": (
-                    "TridentSynth returned a controlled-substance acknowledgement screen. "
-                    "Re-run with acknowledge_controlled_substance_warning=True only if you "
-                    "have a legitimate research purpose."
-                ),
-                "normalized_query": {
-                    "target_smiles": target_smiles,
-                    "use_pks": use_pks,
-                    "use_bio": use_bio,
-                    "use_chem": use_chem,
-                    "max_bio_steps": max_bio_steps,
-                    "max_chem_steps": max_chem_steps,
-                    "pks_release_mechanism": pks_release_mechanism,
-                    "pks_starters": starters,
-                    "pks_extenders": extenders,
-                    "max_carbon": max_carbon,
-                    "max_nitrogen": max_nitrogen,
-                    "max_oxygen": max_oxygen,
-                },
+                "ok": True,
+                "status": "submitted",
+                "task_id": task_id,
+                "submitted_query": normalized_query,
+                "message": "Job submitted successfully. Re-run with wait_for_completion=True to parse the best pathway.",
             }
 
-        submit_soup = BeautifulSoup(submit_response.text, "html.parser")
-        job_info = self._extract_job_info(submit_soup, submit_response.url, submit_response.text)
-
-        out: dict[str, Any] = {
-            "ok": True,
-            "tool": "TridentSynth",
-            "submission_url": self.base_url,
-            "normalized_query": {
-                "target_smiles": target_smiles,
-                "use_pks": use_pks,
-                "use_bio": use_bio,
-                "use_chem": use_chem,
-                "max_bio_steps": max_bio_steps,
-                "max_chem_steps": max_chem_steps,
-                "pks_release_mechanism": pks_release_mechanism,
-                "pks_starters": starters,
-                "pks_extenders": extenders,
-                "max_carbon": max_carbon,
-                "max_nitrogen": max_nitrogen,
-                "max_oxygen": max_oxygen,
-            },
-            "auto_filled": auto_filled,
-            "live_form_fields_used": {
-                "target_smiles": target_field.name,
-                "strategies": strategy_fields,
-                "pks_starters": starter_fields,
-                "pks_extenders": extender_fields,
-            },
-            "job_id": job_info.get("job_id"),
-            "results_url": job_info.get("results_url"),
-            "submission_status_hint": job_info.get("submission_status_hint"),
-            "submission_page_excerpt": job_info.get("raw_page_excerpt"),
-        }
-
-        results_url = job_info.get("results_url")
-        if not results_url and job_info.get("job_id"):
-            results_url = self._resolve_results_url_from_job_id(session, job_info["job_id"])
-            out["results_url"] = results_url
-
-        if not wait_for_completion or not results_url:
-            out["status"] = "submitted"
-            if not results_url:
-                out["warning"] = (
-                    "The job appears to have been submitted, but no results link could be parsed "
-                    "or derived from the response."
-                )
-            return out
-
         deadline = time.time() + max(timeout_seconds, 1)
-        last_parsed: dict[str, Any] | None = None
+        last_html: Optional[str] = None
 
         while time.time() <= deadline:
-            result_response = session.get(results_url, timeout=120)
-            result_response.raise_for_status()
-            result_soup = BeautifulSoup(result_response.text, "html.parser")
-            last_parsed = self._parse_results(result_soup, results_url)
+            result_url, result_html = self._fetch_result_page(session, task_id, payload)
 
-            if self._is_complete(last_parsed):
-                out["status"] = "completed"
-                out["results"] = last_parsed
-                return out
+            if result_html:
+                last_html = result_html
+
+                if self._is_result_complete(result_html):
+                    parsed = self._add_selected_steps(
+                        self._parse_result_page(result_html, task_id=task_id),
+                        normalized_query,
+                    )
+                    return {
+                        "ok": True,
+                        "status": "completed",
+                        "task_id": task_id,
+                        "submitted_query": normalized_query,
+                        "result": parsed,
+                    }
 
             time.sleep(max(poll_seconds, 1))
 
-        out["status"] = "submitted_but_still_running"
-        if last_parsed is not None:
-            out["results"] = last_parsed
-        out["warning"] = (
-            f"Timed out after {timeout_seconds} seconds while polling the results page. "
-            "Use the returned results_url to check later."
-        )
-        return out
+        timed_out_result = None
+        if last_html:
+            timed_out_result = self._add_selected_steps(
+                self._parse_result_page(last_html, task_id=task_id),
+                normalized_query,
+            )
+
+        return {
+            "ok": False,
+            "status": "timed_out",
+            "task_id": task_id,
+            "submitted_query": normalized_query,
+            "partial_result": timed_out_result,
+            "message": f"Timed out after {timeout_seconds} seconds while waiting for TridentSynth results.",
+        }
 
 
 _instance = TridentSynth()

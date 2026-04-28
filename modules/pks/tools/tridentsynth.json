@@ -1,19 +1,19 @@
 {
-  "id": "org.bioe234.function.pks.tridentsynth.v2",
-  "name": "TridentSynth Live Runner",
-  "description": "Submit a live TridentSynth job through the public TridentSynth web form and optionally poll the results page until completion.",
+  "id": "org.bioe234.function.pks.tridentsynth.live.v3",
+  "name": "TridentSynth Live Best Pathway Runner",
+  "description": "Submits a live TridentSynth job, waits for the result page, parses the best pathway, and returns pathway products, reaction SMILES, feasibility scores, and pathway structures as SMILES.",
   "type": "function",
   "keywords": [
+    "TridentSynth",
     "PKS",
     "polyketide",
-    "TridentSynth",
     "biosynthesis",
     "retrosynthesis",
     "RetroTide",
     "DORAnet",
     "SMILES",
-    "live runner",
-    "submit job"
+    "pathway",
+    "reaction SMILES"
   ],
   "date_created": null,
   "date_last_modified": null,
@@ -21,7 +21,7 @@
     {
       "name": "target_smiles",
       "type": "string",
-      "description": "Single target-molecule SMILES string for TridentSynth."
+      "description": "Single target-molecule SMILES string. TridentSynth accepts one molecule at a time."
     },
     {
       "name": "use_pks",
@@ -33,25 +33,25 @@
       "name": "use_bio",
       "type": "boolean",
       "optional": true,
-      "description": "Whether to include the Bio synthesis strategy. Defaults to false."
+      "description": "Whether to include the biological synthesis/tailoring strategy. Defaults to false."
     },
     {
       "name": "use_chem",
       "type": "boolean",
       "optional": true,
-      "description": "Whether to include the Chem synthesis strategy. Defaults to false."
+      "description": "Whether to include the chemical synthesis/tailoring strategy. Defaults to false."
     },
     {
       "name": "max_bio_steps",
       "type": "integer",
       "optional": true,
-      "description": "Maximum biological synthesis steps. Allowed values: 1, 2, or 3."
+      "description": "Maximum number of biological steps to search. Allowed values: 1, 2, or 3."
     },
     {
       "name": "max_chem_steps",
       "type": "integer",
       "optional": true,
-      "description": "Maximum chemical synthesis steps. Allowed values: 1, 2, or 3."
+      "description": "Maximum number of chemical steps to search. Allowed values: 1, 2, or 3."
     },
     {
       "name": "pks_release_mechanism",
@@ -63,67 +63,67 @@
       "name": "pks_starters",
       "type": "array",
       "optional": true,
-      "description": "List of PKS starter substrates."
+      "description": "Optional PKS starter substrates. Supported values include malonyl-CoA, methylmalonyl-CoA, allylmalonyl-CoA, methoxymalonyl-CoA, and hydroxymalonyl-CoA."
     },
     {
       "name": "pks_extenders",
       "type": "array",
       "optional": true,
-      "description": "List of PKS extender substrates."
+      "description": "Optional PKS extender substrates. Supported values include malonyl-CoA, methylmalonyl-CoA, ethylmalonyl-CoA, methoxymalonyl-CoA, and allylmalonyl-CoA."
     },
     {
       "name": "max_carbon",
       "type": "integer",
       "optional": true,
-      "description": "Optional DORAnet maximum carbon atom filter."
+      "description": "Optional DORAnet max carbon atom filter."
     },
     {
       "name": "max_nitrogen",
       "type": "integer",
       "optional": true,
-      "description": "Optional DORAnet maximum nitrogen atom filter."
+      "description": "Optional DORAnet max nitrogen atom filter."
     },
     {
       "name": "max_oxygen",
       "type": "integer",
       "optional": true,
-      "description": "Optional DORAnet maximum oxygen atom filter."
+      "description": "Optional DORAnet max oxygen atom filter."
     },
     {
       "name": "auto_optimize_unspecified",
       "type": "boolean",
       "optional": true,
-      "description": "If true, auto-fill omitted optional settings with a compact exploratory configuration. Defaults to true."
+      "description": "If true, fills missing optional settings with a compact exploratory setup. Defaults to true."
     },
     {
       "name": "wait_for_completion",
       "type": "boolean",
       "optional": true,
-      "description": "If true, poll the results page until the job completes. Defaults to true."
-    },
-    {
-      "name": "poll_seconds",
-      "type": "integer",
-      "optional": true,
-      "description": "Seconds between results-page polling attempts. Defaults to 10."
+      "description": "If true, polls TridentSynth until the results page is complete and parses the best pathway. Defaults to true."
     },
     {
       "name": "timeout_seconds",
       "type": "integer",
       "optional": true,
-      "description": "Maximum total polling time in seconds. Defaults to 300."
+      "description": "Maximum time in seconds to wait for the TridentSynth job to complete. Defaults to 600."
+    },
+    {
+      "name": "poll_seconds",
+      "type": "integer",
+      "optional": true,
+      "description": "Seconds between polling attempts while waiting for results. Defaults to 15."
     },
     {
       "name": "acknowledge_controlled_substance_warning",
       "type": "boolean",
       "optional": true,
-      "description": "If the site shows its controlled-substance acknowledgement screen, continue only when this is true."
+      "description": "If the site returns its controlled-substance warning, continue only if this is true. Defaults to false."
     }
   ],
   "outputs": [
     {
       "type": "object",
-      "description": "JSON-serializable summary containing the submitted query, parsed job info, results URL, and parsed results if available."
+      "description": "Structured result containing status, task ID, submitted query, synthesis parameters, best pathway, PKS product SMILES, post-PKS product SMILES, reaction SMILES, reaction structures, feasibility scores, and pathway structures as SMILES."
     }
   ],
   "examples": [
@@ -132,25 +132,29 @@
         "target_smiles": "CCCCCCC",
         "use_pks": true,
         "use_bio": true,
-        "max_bio_steps": 1
-      },
-      "output": {
-        "result": {
-          "ok": true
-        }
-      }
-    },
-    {
-      "input": {
-        "target_smiles": "CC=C(C)C(=O)O",
-        "use_pks": true,
-        "use_bio": false,
         "use_chem": false,
-        "wait_for_completion": false
+        "max_bio_steps": 1,
+        "wait_for_completion": true
       },
       "output": {
         "result": {
-          "ok": true
+          "ok": true,
+          "status": "completed",
+          "result": {
+            "best_pathway": {
+              "pks_product_smiles": "CCCCC[C@H](C)C(=O)O",
+              "post_pks_product_smiles": "CCCCCCC",
+              "reaction_smiles": [
+                "CCCCCC(C)C(=O)O>>CCCCCCC.O=C=O"
+              ],
+              "pathway_structures_smiles": [
+                "CCCCC[C@H](C)C(=O)O",
+                "CCCCCC(C)C(=O)O",
+                "CCCCCCC",
+                "O=C=O"
+              ]
+            }
+          }
         }
       }
     }

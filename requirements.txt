@@ -8,3 +8,5 @@ mapchiral
 rdkit
 cobra
 git+https://github.com/JBEI/RetroTide.git
+requests
+beautifulsoup4
