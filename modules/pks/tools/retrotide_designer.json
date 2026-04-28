@@ -27,14 +27,14 @@
     {
       "name": "max_designs",
       "type": "integer",
-      "description": "Maximum number of PKS designs to return, ordered best-first by chemical similarity (1–20, default 5).",
+      "description": "Maximum number of PKS designs to return per round, ordered best-first by chemical similarity (1–25, default 5).",
       "default": 5
     },
     {
       "name": "similarity",
       "type": "string",
-      "description": "Fingerprint-based similarity metric used to rank designs against the target. Accepted values: \"tanimoto\" (default) or \"dice\".",
-      "default": "tanimoto"
+      "description": "Similarity metric used to rank designs against the target. Accepted values: \"atompairs\" (default) or \"atomatompath\".",
+      "default": "atompairs"
     }
   ],
 
@@ -50,27 +50,23 @@
       "input": {
         "smiles": "CCCC(=O)O",
         "max_designs": 3,
-        "similarity": "tanimoto"
+        "similarity": "atompairs"
       },
       "output": {
         "result": [
           {
             "rank": 1,
-            "similarity": 0.85,
-            "product_smiles": "CCCC(=O)O",
-            "exact_match": true,
+            "similarity": 0.38,
+            "product_smiles": "CCCC(=O)CC(=O)[S]",
+            "exact_match": false,
             "modules": [
               {
-                "starter": true,
-                "domains": ["KSq", "AT", "ACP"],
-                "extender": "propionyl-CoA",
-                "at_specificity": "propionyl-CoA"
+                "loading": true,
+                "domains": {"AT": {"substrate": "butmal"}}
               },
               {
-                "starter": false,
-                "domains": ["KS", "AT", "KR", "ACP"],
-                "extender": "malonyl-CoA",
-                "at_specificity": "malonyl-CoA"
+                "loading": false,
+                "domains": {"AT": {"substrate": "Malonyl-CoA"}}
               }
             ]
           }
@@ -82,16 +78,25 @@
       "input": {
         "smiles": "CC(O)CC(=O)O",
         "max_designs": 5,
-        "similarity": "dice"
+        "similarity": "atomatompath"
       },
       "output": {
         "result": [
           {
             "rank": 1,
-            "similarity": 0.72,
-            "product_smiles": "CC(O)CC(=O)O",
-            "exact_match": true,
-            "modules": []
+            "similarity": 0.5,
+            "product_smiles": "CC(O)CC(=O)[S]",
+            "exact_match": false,
+            "modules": [
+              {
+                "loading": true,
+                "domains": {"AT": {"substrate": "Methylmalonyl-CoA"}}
+              },
+              {
+                "loading": false,
+                "domains": {"AT": {"substrate": "Malonyl-CoA"}, "KR": {"type": "B1"}}
+              }
+            ]
           }
         ]
       },
