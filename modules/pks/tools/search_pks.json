@@ -1,0 +1,113 @@
+{
+  "id": "org.bioe234.function.pks.search_pks.v1",
+  "name": "SearchPKS",
+  "description": "Searches the SBSPKS v2 + MIBiG combined database for polyketides, NRPSs, and PKS-NRPS hybrids structurally similar to a query molecule. Returns ranked hits with Tanimoto similarity scores, biosynthetic pathway context, organism, and—for intermediate matches—auto-generated engineering hints for early chain release or module substitution.",
+  "type": "function",
+  "keywords": [
+    "PKS",
+    "NRPS",
+    "polyketide",
+    "natural products",
+    "SBSPKS",
+    "MIBiG",
+    "similarity search",
+    "Tanimoto",
+    "Morgan fingerprint",
+    "biosynthetic pathway",
+    "metabolic engineering",
+    "SMILES"
+  ],
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "query_smiles",
+      "type": "string",
+      "description": "SMILES string of the target molecule. Must be parseable by RDKit. Example: \"CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O\" for pikromycin."
+    },
+    {
+      "name": "search_type",
+      "type": "string",
+      "description": "Search mode. \"reaction_search\" ranks all 4000+ index entries by Tanimoto similarity and returns hits with full metadata. \"pathway_search\" does the same but additionally fetches the complete biosynthetic step list from SBSPKS for each hit.",
+      "default": "reaction_search",
+      "optional": true
+    },
+    {
+      "name": "max_results",
+      "type": "integer",
+      "description": "Maximum number of similar compounds to return (default 5).",
+      "default": 5,
+      "optional": true
+    },
+    {
+      "name": "similarity_threshold",
+      "type": "number",
+      "description": "Minimum Tanimoto similarity cutoff between 0.0 and 1.0 (default 0.6). Entries below this value are excluded.",
+      "default": 0.6,
+      "optional": true
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "object",
+      "description": "Dict with keys: query_smiles (str), total_hits (int), results (list of hit dicts), search_type_used (str), warnings (list of str). Each hit dict contains: compound_name, smiles, similarity_score, source (sbspks or mibig), is_intermediate, module_number, pathway_name, organism, bgc_accession, engineering_hint. pathway_search hits also include pathway_steps (list of str)."
+    }
+  ],
+
+  "examples": [
+    {
+      "input": {
+        "query_smiles": "CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O",
+        "search_type": "reaction_search",
+        "max_results": 3,
+        "similarity_threshold": 0.3
+      },
+      "output": {
+        "query_smiles": "CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O",
+        "total_hits": 5,
+        "results": [
+          {
+            "compound_name": "Pikromycin",
+            "similarity_score": 1.0,
+            "source": "sbspks",
+            "is_intermediate": false,
+            "pathway_name": "Pikromycin",
+            "organism": "Streptomyces venezuelae",
+            "bgc_accession": null,
+            "engineering_hint": null
+          }
+        ],
+        "search_type_used": "reaction_search",
+        "warnings": []
+      }
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/search_pks.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+
+    "mcp_name": "search_pks",
+    "seq_params": []
+  },
+
+  "trigger_phrases": [
+    "find polyketides similar to",
+    "search PKS database for",
+    "what natural products are similar to",
+    "SBSPKS similarity search",
+    "find biosynthetic pathway for",
+    "structurally similar polyketide",
+    "MIBiG search",
+    "PKS intermediate search"
+  ],
+
+  "dependencies": {
+    "pip": ["rdkit", "requests"]
+  }
+}

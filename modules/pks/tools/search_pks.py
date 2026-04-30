@@ -508,11 +508,12 @@ class SearchPKS:
         try:
             import requests
             from rdkit.Chem import MolFromSmiles, RDKFingerprint
-            from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
+            from rdkit.Chem import rdFingerprintGenerator
             from rdkit import DataStructs
+            _gen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
             self._requests = requests
             self._MolFromSmiles = MolFromSmiles
-            self._GetMorganFP = GetMorganFingerprintAsBitVect
+            self._GetMorganFP = lambda mol, radius, nBits: _gen.GetFingerprint(mol)
             self._DataStructs = DataStructs
         except ImportError as exc:
             self._import_error = exc
