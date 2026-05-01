@@ -102,8 +102,11 @@ Limitations:
 - The parser extracts text from the results page, so major website layout changes could require updates.
 - The tool predicts computationally plausible pathways; results should still be biologically and experimentally validated.
 
-### `dna_gc_content`
+### `dna_gc_content
 Computes the GC content (fraction of G and C bases) of a DNA sequence.
+
+### `resolve_smiles`
+Converts a chemical name (common, trade, or IUPAC) to a canonical SMILES string via PubChem. If the input is already valid SMILES, returns immediately. Always use before any tool that requires SMILES input to ensure input for that tool is SMILES.
 
 ---
 
