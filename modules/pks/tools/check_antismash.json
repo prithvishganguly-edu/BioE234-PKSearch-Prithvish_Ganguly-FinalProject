@@ -1,0 +1,41 @@
+{
+  "id": "org.bioe234.function.pks.check_antismash.v1",
+  "name": "Check antiSMASH Results",
+  "description": "Polls the antiSMASH API to check job status and extracts polyketide synthase (PKS) domain architectures if completed.",
+  "type": "function",
+  "keywords": ["antismash", "check", "status", "results", "PKS"],
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "job_id",
+      "type": "string",
+      "description": "The Job ID string provided by submit_antismash."
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "object",
+      "description": "A dictionary containing job status, visualization URL, and detailed PKS module structures."
+    }
+  ],
+
+  "examples": [
+    {
+      "input":  { "job_id": "example-job-123" },
+      "output": { "status": "running", "message": "The job is still processing." }
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/check_antismash.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+
+    "mcp_name": "check_antismash"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "id": "org.bioe234.function.pks.reverse_translate.v1",
+  "name": "Reverse Translate AA to DNA",
+  "description": "Converts an amino acid sequence into a codon-optimized DNA sequence for a target host and saves it as a GenBank file.",
+  "type": "function",
+  "keywords": ["translation", "reverse translate", "codon optimization", "DNA", "genbank"],
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "aa_sequence",
+      "type": "string",
+      "description": "The raw amino acid sequence to be converted."
+    },
+    {
+      "name": "host",
+      "type": "string",
+      "description": "The target organism for codon optimization (e.g., 'e_coli', 's_albus'). Defaults to 'e_coli'."
+    },
+    {
+      "name": "filename",
+      "type": "string",
+      "description": "The desired name for the output GenBank file. Must end in .gb."
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "object",
+      "description": "A dictionary containing the optimized DNA string and the file path where the GenBank file was saved."
+    }
+  ],
+
+  "examples": [
+    {
+      "input":  { "aa_sequence": "MYQ", "host": "e_coli", "filename": "test.gb" },
+      "output": { "status": "success", "file_saved_at": "modules/pks/data/test.gb" }
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/reverse_translate.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+
+    "mcp_name": "reverse_translate"
+  }
+}

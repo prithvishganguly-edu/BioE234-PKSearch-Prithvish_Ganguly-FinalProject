@@ -10,3 +10,7 @@ cobra
 git+https://github.com/JBEI/RetroTide.git
 requests
 beautifulsoup4
+requests
+dnachisel
+biopython
+setuptools

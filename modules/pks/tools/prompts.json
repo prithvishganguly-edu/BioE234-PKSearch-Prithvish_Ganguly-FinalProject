@@ -1,0 +1,50 @@
+[
+  {
+    "prompt": "What is the reverse complement of ATGCGATCG?",
+    "expected_tool": "dna_reverse_complement",
+    "expected_args": { "seq": "ATGCGATCG" },
+    "notes": "Basic raw sequence input."
+  },
+  {
+    "prompt": "Give me the reverse complement of the pBR322 plasmid sequence.",
+    "expected_tool": "dna_reverse_complement",
+    "expected_args": { "seq": "pBR322" },
+    "notes": "Resource name input — the framework resolves pBR322 to its sequence automatically."
+  },
+  {
+    "prompt": "Translate the first 60 bases of pBR322 in reading frame 1.",
+    "expected_tool": "dna_translate",
+    "expected_args": { "seq": "pBR322", "start": 0, "end": 60, "frame": 1 },
+    "notes": "Uses coordinate slicing on a named resource."
+  },
+  {
+    "prompt": "Translate ATGGCTAGCTAG and show me the protein.",
+    "expected_tool": "dna_translate",
+    "expected_args": { "seq": "ATGGCTAGCTAG", "frame": 1 },
+    "notes": "Raw sequence input, default frame."
+  },
+  {
+    "prompt": "What protein does the sequence AATGGCTAAA encode if you start reading at position 1?",
+    "expected_tool": "dna_translate",
+    "expected_args": { "seq": "AATGGCTAAA", "start": 1, "frame": 1 },
+    "notes": "Tests the AI's ability to map natural language coordinate descriptions."
+  },
+  {
+    "prompt": "Reverse translate this amino acid sequence MKV and save it for S. albus.",
+    "expected_tool": "reverse_translate",
+    "expected_args": { "aa_sequence": "MKV", "host": "s_albus", "filename": "synthetic_pks.gb" },
+    "notes": "Tests the bridge component and host parsing."
+  },
+  {
+    "prompt": "Submit this DNA sequence to antiSMASH to check the PKS domains. Sequence: ATGCGT",
+    "expected_tool": "submit_antismash",
+    "expected_args": { "seq": "ATGCGT" },
+    "notes": "Tests API submission."
+  },
+  {
+    "prompt": "Check the status of my antiSMASH job ID 12345.",
+    "expected_tool": "check_antismash",
+    "expected_args": { "job_id": "12345" },
+    "notes": "Tests results parsing."
+  }
+]

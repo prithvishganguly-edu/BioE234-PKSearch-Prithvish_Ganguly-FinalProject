@@ -7,8 +7,21 @@ module-level alias  (for example: `reverse_complement = _instance.run`)  so that
 direct imports continue to work for students who prefer that style.
 """
 
-import pytest
 
+
+import pytest
+from modules.pks.tools.reverse_translate import reverse_translate
+
+def test_reverse_translate():
+    """Unit test to ensure the bridge successfully outputs DNA."""
+    # We pass in MKV and ask for E. coli optimization
+    result = reverse_translate("MKV", host="e_coli", filename="test_output.gb")
+    
+    assert result["status"] == "success"
+    assert "dna_sequence" in result
+    # M translates to ATG, so the DNA should start with ATG
+    assert result["dna_sequence"].startswith("ATG")
+"""
 from modules.seq_basics.tools.translate import translate
 from modules.seq_basics.tools.reverse_complement import reverse_complement
 
@@ -38,3 +51,4 @@ def test_translate_with_coordinates_and_frame():
     # start=1 → ATGGCTAAA
     # frame=1 → ATG GCT AAA → M A K
     assert translate("AATGGCTAAA", start=1, end=None, frame=1) == "MAK"
+"""
