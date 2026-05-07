@@ -11,7 +11,7 @@ class CheckAntiSmash:
     """
 
     def initiate(self) -> None:
-        self.status_base = "https://antismash.secondarymetabolites.org/api/v2.0/status"
+        self.status_base = "https://antismash.secondarymetabolites.org/api/v1.0/status"
         self.results_base = "https://antismash.secondarymetabolites.org/upload"
 
     def run(self, job_id: str) -> dict:
@@ -28,7 +28,7 @@ class CheckAntiSmash:
             raise ValueError(f"Failed to check status: {e}")
             
         status_data = status_res.json()
-        if status_data.get("status") != "completed":
+        if status_data.get("status") not in ("completed", "done"):
              return {
                  "status": status_data.get("status", "unknown"), 
                  "message": "The job is still processing. Please try again in 1-2 minutes."

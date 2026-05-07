@@ -11,7 +11,7 @@ class SubmitAntiSmash:
     """
 
     def initiate(self) -> None:
-        self.api_url = "https://antismash.secondarymetabolites.org/api/v2.0/submit"
+        self.api_url = "https://antismash.secondarymetabolites.org/api/v1.0/submit"
 
     def run(self, seq: str) -> str:
         """Submit sequence to antiSMASH API and return Job ID."""
@@ -19,15 +19,12 @@ class SubmitAntiSmash:
             raise ValueError("Sequence cannot be empty.")
 
         payload = {
-            "email": "opshoryc@berkeley.edu", 
-            "cbgeneral": "on",               # ClusterBlast
-            "cbknownclusters": "on",         # KnownClusterBlast (MIBiG)
-            "asf": "on"                      # Active Site Finder
+            "email": "opshoryc@berkeley.edu",
         }
-        
-        # antiSMASH expects a FASTA file upload, so we mock a file in memory
+
+        # antiSMASH v1.0 expects the FASTA upload under the field name "seq"
         files = {
-            "seqfile": ("user_pks.fasta", f">user_synthetic_pks\n{seq}")
+            "seq": ("user_pks.fasta", f">user_synthetic_pks\n{seq}\n")
         }
         
         try:
