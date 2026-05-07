@@ -1,4 +1,5 @@
 [tool.pytest.ini_options]
+pythonpath = ["."]
 markers = [
     "slow: marks tests that take a long time to run (e.g. retrotide design)",
     "network: marks tests that require network access (e.g. PubChem lookup)",
