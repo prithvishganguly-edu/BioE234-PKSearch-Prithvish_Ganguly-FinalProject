@@ -24,6 +24,7 @@ class SubmitAntiSmash:
             "email": "opshoryc@berkeley.edu",
             "asf": "true",
             "knownclusterblast": "true",
+            "genefinder": "prodigal",
         }
 
         # antiSMASH v1.0 expects the FASTA upload under the field name "seq"
