@@ -1,0 +1,59 @@
+{
+  "id": "org.bioe234.function.pks.clustercad_get_subunits.v1",
+  "name": "ClusterCAD Get Subunits",
+  "description": "Retrieve all subunits and their domain architectures for a specific PKS cluster from ClusterCAD using its MIBiG accession number.",
+  "type": "function",
+  "keywords": ["PKS", "polyketide synthase", "ClusterCAD", "subunit", "domain", "architecture", "MIBiG"],
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "mibig_accession",
+      "type": "string",
+      "description": "MIBiG accession number of the PKS cluster (e.g. 'BGC0001492.1' for Abyssomicin). Use clustercad_list_clusters to find valid accession numbers."
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "array",
+      "description": "List of subunits, each with 'subunit_name', 'subunit_id', and 'modules'. Each module has a 'module' number and 'domains' list with 'domain_type', 'domain_id', and 'annotation'."
+    }
+  ],
+
+  "examples": [
+    {
+      "input": { "mibig_accession": "BGC0001492.1" },
+      "output": {
+        "result": [
+          {
+            "subunit_name": "AbsB1",
+            "subunit_id": "24119",
+            "modules": [
+              {
+                "module": "module 0",
+                "domains": [
+                  {"domain_type": "KS", "domain_id": "27716", "annotation": ""},
+                  {"domain_type": "AT", "domain_id": "27717", "annotation": "substrate mal, loading"},
+                  {"domain_type": "DH", "domain_id": "27718", "annotation": "inactive"},
+                  {"domain_type": "ACP", "domain_id": "27719", "annotation": ""}
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/clustercad_get_subunits.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+    "mcp_name": "clustercad_get_subunits",
+    "seq_params": []
+  }
+}

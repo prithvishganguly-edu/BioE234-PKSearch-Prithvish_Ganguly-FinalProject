@@ -1,0 +1,218 @@
+{
+  "id": "org.bioe234.function.pks.search_pks.v1",
+  "name": "PKS Intermediate and Product Similarity Search",
+  "description": "Searches a combined index of 4088 polyketide structures — 2440 SBSPKS biosynthetic intermediates and final products, plus 1648 MIBiG polyketide compounds — and returns the most structurally similar entries to a query SMILES. Similarity is computed locally using RDKit Morgan fingerprints (Tanimoto coefficient). Unlike ClusterCAD, which searches final PKS products only, this tool also searches every biosynthetic intermediate generated along each PKS assembly line. If the query molecule matches a mid-pathway intermediate, the tool returns an engineering_hint explaining how to engineer that PKS to terminate early and release the target structure. MIBiG hits include a bgc_accession field that the antiSMASH validator can consume directly.",
+  "type": "function",
+  "keywords": [
+    "PKS",
+    "polyketide synthase",
+    "biosynthetic intermediate",
+    "SBSPKS",
+    "MIBiG",
+    "structural similarity",
+    "Tanimoto",
+    "natural products",
+    "biosynthetic pathway",
+    "PKS engineering",
+    "TE domain",
+    "module truncation",
+    "BGC accession",
+    "secondary metabolites",
+    "SMILES",
+    "polyketide",
+    "macrolide",
+    "NRPS"
+  ],
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "query_smiles",
+      "type": "string",
+      "description": "SMILES string of the target molecule. Must be a valid RDKit-parseable SMILES (not an InChI, name, or CAS number). Example: \"CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O\" for pikromycin."
+    },
+    {
+      "name": "search_type",
+      "type": "string",
+      "description": "Search mode. \"reaction_search\" (default) — compares the query against all 4088 index entries (SBSPKS intermediates + SBSPKS final products + MIBiG polyketides) and returns ranked hits with full metadata including engineering_hint for intermediate matches. \"pathway_search\" — same search, but for each SBSPKS hit additionally fetches the complete biosynthetic step list from the live SBSPKS server and includes it as \"pathway_steps\" in the result.",
+      "default": "reaction_search"
+    },
+    {
+      "name": "max_results",
+      "type": "integer",
+      "description": "Maximum number of results to return, ordered by Tanimoto similarity (highest first). Default is 5.",
+      "default": 5
+    },
+    {
+      "name": "similarity_threshold",
+      "type": "number",
+      "description": "Minimum Tanimoto score (0.0–1.0) required for an entry to appear in results. Default is 0.6. Lower to 0.3–0.4 for distantly related scaffolds.",
+      "default": 0.6
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "object",
+      "description": "Structured dictionary with four top-level keys: (1) \"query_smiles\" — the input SMILES string; (2) \"total_hits\" — total number of index entries that met the similarity threshold before truncating to max_results; (3) \"results\" — ranked list of matching entries, highest similarity first; (4) \"search_type_used\" — which mode was executed; (5) \"warnings\" — list of non-fatal issues. Each entry in \"results\" contains: compound_name (str), smiles (str), similarity_score (float 0–1), source (\"sbspks\" or \"mibig\"), is_intermediate (bool — true when the match is a mid-pathway PKS chain elongation state rather than a released final product), module_number (int or null — 1-based PKS step for intermediates, 0 for starter units, null for final products), pathway_name (str), organism (str), bgc_accession (str or null — MIBiG BGC accession present only for mibig-source hits), engineering_hint (str or null — auto-generated engineering suggestion present only for is_intermediate=true hits). \"pathway_steps\" (list of str) is additionally present for sbspks-source hits when search_type=\"pathway_search\"."
+    }
+  ],
+
+  "examples": [
+    {
+      "input": {
+        "query_smiles": "CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O",
+        "search_type": "reaction_search",
+        "max_results": 3,
+        "similarity_threshold": 0.4
+      },
+      "output": {
+        "query_smiles": "CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O",
+        "total_hits": 12,
+        "results": [
+          {
+            "compound_name": "Pikromycin",
+            "smiles": "CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O",
+            "similarity_score": 1.0,
+            "source": "sbspks",
+            "is_intermediate": false,
+            "module_number": null,
+            "pathway_name": "Pikromycin",
+            "organism": "Streptomyces venezuelae",
+            "bgc_accession": null,
+            "engineering_hint": null
+          },
+          {
+            "compound_name": "pikromycin",
+            "smiles": "CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O",
+            "similarity_score": 1.0,
+            "source": "mibig",
+            "is_intermediate": false,
+            "module_number": null,
+            "pathway_name": "pikromycin",
+            "organism": "Streptomyces venezuelae ATCC 15439",
+            "bgc_accession": "BGC0000094",
+            "engineering_hint": null
+          },
+          {
+            "compound_name": "Narbomycin module 7 intermediate",
+            "smiles": "...",
+            "similarity_score": 0.83,
+            "source": "sbspks",
+            "is_intermediate": true,
+            "module_number": 7,
+            "pathway_name": "Narbomycin",
+            "organism": "Streptomyces venezuelae",
+            "bgc_accession": null,
+            "engineering_hint": "Target matches the module 7 intermediate of the Narbomycin pathway. Consider engineering this PKS to release the chain early by relocating the thioesterase (TE) domain after module 7, or by deleting all modules downstream of module 7."
+          }
+        ],
+        "search_type_used": "reaction_search",
+        "warnings": []
+      },
+      "notes": "Pikromycin query. Returns exact self-match from both SBSPKS and MIBiG (the MIBiG hit carries bgc_accession for antiSMASH validation). The Narbomycin intermediate hit shows the non-redundant value: nature already builds this scaffold partway through a related pathway."
+    },
+    {
+      "input": {
+        "query_smiles": "CCC(O)C(C)C(S)=O",
+        "search_type": "reaction_search",
+        "max_results": 3,
+        "similarity_threshold": 0.5
+      },
+      "output": {
+        "query_smiles": "CCC(O)C(C)C(S)=O",
+        "total_hits": 4,
+        "results": [
+          {
+            "compound_name": "Erythromycin module 2 intermediate",
+            "smiles": "CCC(O)C(C)C(S)=O",
+            "similarity_score": 1.0,
+            "source": "sbspks",
+            "is_intermediate": true,
+            "module_number": 2,
+            "pathway_name": "Erythromycin",
+            "organism": "Saccharopolyspora erythraea",
+            "bgc_accession": null,
+            "engineering_hint": "Target matches the module 2 intermediate of the Erythromycin pathway. Consider engineering this PKS to release the chain early by relocating the thioesterase (TE) domain after module 2, or by deleting all modules downstream of module 2."
+          }
+        ],
+        "search_type_used": "reaction_search",
+        "warnings": []
+      },
+      "notes": "Small-molecule query that matches a specific mid-pathway intermediate. This is the non-redundant use case: ClusterCAD would return no hits because no known PKS produces this as a final product. SearchPKS surfaces it as module 2 of the erythromycin pathway with an actionable engineering hint."
+    },
+    {
+      "input": {
+        "query_smiles": "CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O",
+        "search_type": "pathway_search",
+        "max_results": 1,
+        "similarity_threshold": 0.9
+      },
+      "output": {
+        "query_smiles": "CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O",
+        "total_hits": 3,
+        "results": [
+          {
+            "compound_name": "Pikromycin",
+            "smiles": "CCC1OC(=O)C(C)C(=O)C(C)C(OC2OC(C)CC(C2O)N(C)C)C(C)CC(C)C(=O)C=CC1(C)O",
+            "similarity_score": 1.0,
+            "source": "sbspks",
+            "is_intermediate": false,
+            "module_number": null,
+            "pathway_name": "Pikromycin",
+            "organism": "Streptomyces venezuelae",
+            "bgc_accession": null,
+            "engineering_hint": null,
+            "pathway_steps": [
+              "PikAI (Loading Module)",
+              "+Methyl-Malonate PikAI (KS condensation + KR Reduction)",
+              "+Malonate PikAI (KS condensation + DH + KR Reduction)",
+              "+Methyl-Malonate PikAII (KS condensation)",
+              "+Methyl-Malonate PikAII (KS condensation + DH +ER + KR Reduction)",
+              "+Methyl-Malonate PikAIII (KS condensation + KR Reduction)",
+              "+Methyl-Malonate PikAIV (KS condensation)",
+              "PikAIV (Macrolactonization)",
+              "PikC,DesVII (O-Glycosylation + Hydroxylation)"
+            ]
+          }
+        ],
+        "search_type_used": "pathway_search",
+        "warnings": []
+      },
+      "notes": "pathway_search mode fetches the complete step-by-step biosynthetic graph from SBSPKS for each hit. Useful when you want to understand not just similarity but the full assembly-line logic of the matched pathway."
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/search_pks.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+
+    "mcp_name": "pks_search_sbspks",
+    "seq_params": []
+  },
+
+  "trigger_phrases": [
+    "does this molecule appear as a PKS intermediate",
+    "find similar polyketides or intermediates",
+    "what PKS pathway builds something like this",
+    "is this a biosynthetic intermediate",
+    "search PKS intermediate database",
+    "could a PKS make this partway through a pathway",
+    "find related biosynthetic intermediates",
+    "what engineering hint does this molecule suggest",
+    "structural similarity to known PKS products or intermediates",
+    "does this look like a known PKS metabolite",
+    "search SBSPKS and MIBiG",
+    "find BGC accession for antiSMASH validation"
+  ],
+
+  "dependencies": {
+    "pip": ["rdkit", "requests"]
+  },
+
+  "notes": "Index sources: (1) SBSPKS v2 — all ~225 pathway pages fetched from make_reaction.cgi, 2440 nodes extracted and SMILES fetched from display_smiles.cgi, cached to modules/pks/data/sbspks_intermediate_index.json. (2) MIBiG — polyketide entries downloaded from mibig-secmet/mibig-json master ZIP, 1648 compound entries with SMILES, cached to modules/pks/data/mibig_cache.json. Combined index of 4088 entries cached to modules/pks/data/combined_index.json with 30-day TTL. The SBSPKS live search CGI endpoints (search_similar1.cgi, search_functional.cgi) have a persistent server-side permission bug and are not used."
+}

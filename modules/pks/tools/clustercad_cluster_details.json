@@ -1,0 +1,49 @@
+{
+  "id": "org.bioe234.function.pks.clustercad_cluster_details.v1",
+  "name": "ClusterCAD Cluster Details",
+  "description": "Retrieve details about a specific PKS cluster from the ClusterCAD database using its MIBiG accession number.",
+  "type": "function",
+  "keywords": ["PKS", "polyketide synthase", "ClusterCAD", "cluster", "MIBiG", "accession"],
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "mibig_accession",
+      "type": "string",
+      "description": "MIBiG accession number of the PKS cluster to look up (e.g. 'BGC0000055' for Erythromycin)."
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "object",
+      "description": "Cluster details including 'accession', 'description' (cluster name), 'subunit_count', 'module_count', and 'url'."
+    }
+  ],
+
+  "examples": [
+    {
+      "input": { "mibig_accession": "BGC0000055" },
+      "output": {
+        "result": {
+          "accession": "BGC0000055",
+          "description": "Erythromycin",
+          "subunit_count": 3,
+          "module_count": 6,
+          "url": "https://clustercad.jbei.org/pks/BGC0000055/"
+        }
+      }
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/clustercad_cluster_details.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+    "mcp_name": "clustercad_cluster_details",
+    "seq_params": []
+  }
+}
