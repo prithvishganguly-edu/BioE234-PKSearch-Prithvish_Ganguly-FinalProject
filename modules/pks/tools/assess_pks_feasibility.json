@@ -39,7 +39,7 @@
       "output": {
         "feasible": true,
         "score": 0.88,
-        "recommendation": "Strong PKS target — proceed with pks_design_retrotide."
+        "recommendation": "Strong PKS target. Check pks_design_retrotide for de novo designs; also review pks_search_sbspks for existing pathway shortcuts."
       },
       "notes": "Linear oxygenated chain — classic polyketide backbone"
     },
@@ -48,7 +48,7 @@
       "output": {
         "feasible": false,
         "score": 0.15,
-        "recommendation": "Poor PKS target — this compound does not match type-I modular PKS characteristics."
+        "recommendation": "Poor PKS target. Check tridentsynth for hybrid PKS + tailoring pathways; pks_search_sbspks may still find distantly related scaffolds."
       },
       "notes": "Benzene — aromatic, no oxygens, not PKS-accessible"
     },
@@ -57,7 +57,7 @@
       "output": {
         "feasible": true,
         "score": 0.85,
-        "recommendation": "Strong PKS target — proceed with pks_design_retrotide."
+        "recommendation": "Strong PKS target. Check pks_design_retrotide for de novo designs; also review pks_search_sbspks for existing pathway shortcuts."
       },
       "notes": "Branched beta-keto acid with hydroxyl — typical PKS intermediate"
     },
@@ -66,7 +66,7 @@
       "output": {
         "feasible": false,
         "score": 0.27,
-        "recommendation": "Poor PKS target — this compound does not match type-I modular PKS characteristics."
+        "recommendation": "Poor PKS target. Check tridentsynth for hybrid PKS + tailoring pathways; pks_search_sbspks may still find distantly related scaffolds."
       },
       "notes": "Isobutylamine — too short, nitrogen requires tailoring, no oxygens"
     }

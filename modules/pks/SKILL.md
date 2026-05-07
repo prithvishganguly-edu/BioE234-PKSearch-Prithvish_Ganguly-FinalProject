@@ -61,10 +61,11 @@ Use when:
   each with status (pass/warn/fail), detail string, and weight
 - `recommendation` (str) — guidance on which tool to use next
 
-**Interpreting results:**
-- Score ≥ 0.8 → strong PKS target, proceed with `pks_design_retrotide`
-- Score 0.6–0.8 → moderate target, consider both retrotide and `tridentsynth`
-- Score < 0.6 → poor target, use `tridentsynth` for hybrid pathways
+**Interpreting results — all three design tools run in parallel regardless of score;
+the score determines which results to emphasize:**
+- Score ≥ 0.8 → strong PKS target; lead with `pks_design_retrotide`, also check `pks_search_sbspks` for existing pathway shortcuts
+- Score 0.6–0.8 → moderate target; lead with `pks_search_sbspks` for similar known intermediates, also check retrotide and `tridentsynth`
+- Score < 0.6 → poor PKS target; lead with `tridentsynth` for hybrid pathways, `pks_search_sbspks` may still find distantly related scaffolds
 
 ---
 
@@ -280,13 +281,15 @@ Parameters:
 ### "Design a PKS for [molecule]"
 1. `resolve_smiles(molecule name)` → get SMILES
 2. `assess_pks_feasibility(smiles)` → pre-screen the target
-3. If feasible (score ≥ 0.6):
-   - `pks_design_retrotide(smiles)` → get proposed domain architecture
-   - `clustercad_search_domains(domain_type, annotation)` → find natural examples of each proposed module
-   - Present full results including all module domains
-4. If not feasible (score < 0.6):
-   - Inform the user which checks failed and why
-   - `tridentsynth(smiles)` → PKS + tailoring pathway design
+3. Run all three design tools in parallel:
+   - `pks_design_retrotide(smiles)` → de novo chimeric PKS designs
+   - `pks_search_sbspks(smiles)` → find similar known compounds/intermediates
+   - `tridentsynth(smiles)` → PKS + tailoring hybrid pathways
+4. Present results based on feasibility score:
+   - Score ≥ 0.8: Lead with retrotide designs; highlight search_pks matches as existing pathway shortcuts
+   - Score 0.6–0.8: Lead with search_pks intermediate matches; show retrotide and tridentsynth as alternatives
+   - Score < 0.6: Lead with tridentsynth hybrid pathways; note any distant search_pks scaffolds
+5. For retrotide hits: `clustercad_search_domains(domain_type, annotation)` → find natural examples of each proposed module
 
 ### "Tell me about the Erythromycin PKS"
 1. `clustercad_list_clusters(reviewed_only=True)` → find accession

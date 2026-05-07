@@ -223,14 +223,17 @@ class AssessPksFeasibility:
         feasible = score >= self._FEASIBILITY_THRESHOLD
 
         if score >= 0.8:
-            rec = "Strong PKS target — proceed with pks_design_retrotide."
+            rec = ("Strong PKS target. Check pks_design_retrotide for de novo "
+                   "designs; also review pks_search_sbspks for existing "
+                   "pathway shortcuts.")
         elif score >= self._FEASIBILITY_THRESHOLD:
-            rec = ("Moderate PKS target — some features may need post-PKS "
-                   "tailoring. Consider also running tridentsynth.")
+            rec = ("Moderate PKS target. Check pks_search_sbspks for similar "
+                   "known intermediates; also review pks_design_retrotide and "
+                   "tridentsynth.")
         else:
-            rec = ("Poor PKS target — this compound does not match type-I "
-                   "modular PKS characteristics. Use tridentsynth for hybrid "
-                   "PKS + tailoring pathways.")
+            rec = ("Poor PKS target. Check tridentsynth for hybrid PKS + "
+                   "tailoring pathways; pks_search_sbspks may still find "
+                   "distantly related scaffolds.")
 
         return {
             "feasible": feasible,
