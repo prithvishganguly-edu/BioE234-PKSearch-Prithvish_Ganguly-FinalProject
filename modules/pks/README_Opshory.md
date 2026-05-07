@@ -99,7 +99,7 @@ The sequence is wrapped in FASTA format and uploaded to the antiSMASH v1.0 REST 
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `seq` | string | Raw DNA sequence string to analyze |
+| `seq` | string | Raw DNA sequence string to analyze (minimum 1000 bp) |
 
 ### Output
 

@@ -273,7 +273,7 @@ Converts amino acids to DNA and saves a GenBank file.
 
 ### `submit_antismash`
 Submits an assembled DNA sequence to the public antiSMASH server to verify domain architecture.
-- **Input:** A raw DNA sequence string (usually generated from `reverse_translate`).
+- **Input:** A raw DNA sequence string (usually generated from `reverse_translate`). Must be at least 1000 bp — the tool will raise a ValueError for shorter sequences before submitting.
 - **Output:** Returns a `job_id`. Tell the user to wait briefly, then immediately invoke `check_antismash`.
 - **Always-on analyses:** Active Site Finder (catalytic residue annotation) and KnownClusterBlast (MIBiG similarity) are enabled on every submission automatically.
 
