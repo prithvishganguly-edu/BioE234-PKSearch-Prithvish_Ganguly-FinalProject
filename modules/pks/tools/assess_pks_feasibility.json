@@ -1,0 +1,98 @@
+{
+  "id": "org.bioe234.function.pks.assess_pks_feasibility.v1",
+  "name": "Assess PKS Feasibility",
+  "description": "Pre-screen a target molecule to determine whether it is amenable to type-I modular PKS biosynthesis. Returns a feasibility score (0-1) and diagnostic checks covering molecular weight, carbon chain length, heteroatom content, aromatic rings, oxygen ratio, functional group complexity, and ring complexity.",
+  "type": "function",
+
+  "keywords": [
+    "PKS",
+    "polyketide",
+    "feasibility",
+    "pre-screen",
+    "retrobiosynthesis",
+    "type-I modular",
+    "biodesign",
+    "SMILES"
+  ],
+
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "smiles",
+      "type": "string",
+      "description": "SMILES string of the target molecule to evaluate. Call resolve_smiles first if the user provided a chemical name."
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "object",
+      "description": "Feasibility assessment containing: feasible (bool), score (float 0-1), molecular_properties (dict with MW, atom counts, stereocenters, rings), checks (array of 7 diagnostic results with name, status, detail, weight), and recommendation (guidance string)."
+    }
+  ],
+
+  "examples": [
+    {
+      "input": { "smiles": "CC(O)CC(=O)CC(O)CC(=O)O" },
+      "output": {
+        "feasible": true,
+        "score": 0.88,
+        "recommendation": "Strong PKS target — proceed with pks_design_retrotide."
+      },
+      "notes": "Linear oxygenated chain — classic polyketide backbone"
+    },
+    {
+      "input": { "smiles": "c1ccccc1" },
+      "output": {
+        "feasible": false,
+        "score": 0.15,
+        "recommendation": "Poor PKS target — this compound does not match type-I modular PKS characteristics."
+      },
+      "notes": "Benzene — aromatic, no oxygens, not PKS-accessible"
+    },
+    {
+      "input": { "smiles": "CCC(O)C(C)C(=O)CC(=O)O" },
+      "output": {
+        "feasible": true,
+        "score": 0.85,
+        "recommendation": "Strong PKS target — proceed with pks_design_retrotide."
+      },
+      "notes": "Branched beta-keto acid with hydroxyl — typical PKS intermediate"
+    },
+    {
+      "input": { "smiles": "CC(C)CN" },
+      "output": {
+        "feasible": false,
+        "score": 0.27,
+        "recommendation": "Poor PKS target — this compound does not match type-I modular PKS characteristics."
+      },
+      "notes": "Isobutylamine — too short, nitrogen requires tailoring, no oxygens"
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/assess_pks_feasibility.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+
+    "mcp_name": "assess_pks_feasibility",
+    "seq_params": []
+  },
+
+  "trigger_phrases": [
+    "is this a good PKS target",
+    "assess PKS feasibility for",
+    "can a PKS synthesize this",
+    "is this molecule PKS-accessible",
+    "pre-screen this compound for PKS",
+    "check if PKS can make"
+  ],
+
+  "dependencies": {
+    "pip": ["rdkit"]
+  }
+}

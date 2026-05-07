@@ -1,0 +1,74 @@
+[
+  {
+    "prompt": "What is the SMILES for erythromycin?",
+    "expected_tool": "resolve_smiles",
+    "expected_args": { "query": "erythromycin" },
+    "notes": "Common antibiotic name — should resolve via PubChem."
+  },
+  {
+    "prompt": "Resolve this SMILES: CCCC(=O)O",
+    "expected_tool": "resolve_smiles",
+    "expected_args": { "query": "CCCC(=O)O" },
+    "notes": "Already-valid SMILES — should return immediately via RDKit without a network call."
+  },
+  {
+    "prompt": "Convert 2-methylbutanoic acid to SMILES.",
+    "expected_tool": "resolve_smiles",
+    "expected_args": { "query": "2-methylbutanoic acid" },
+    "notes": "IUPAC name input — resolved via PubChem."
+  },
+  {
+    "prompt": "Look up the SMILES string for lovastatin.",
+    "expected_tool": "resolve_smiles",
+    "expected_args": { "query": "lovastatin" },
+    "notes": "Well-known polyketide drug name."
+  },
+  {
+    "prompt": "Design a PKS for CCCC(=O)O.",
+    "expected_tool": "pks_design_retrotide",
+    "expected_args": { "smiles": "CCCC(=O)O" },
+    "notes": "Basic PKS design request with default parameters."
+  },
+  {
+    "prompt": "Give me 10 PKS designs for CC(O)CC(=O)O.",
+    "expected_tool": "pks_design_retrotide",
+    "expected_args": { "smiles": "CC(O)CC(=O)O", "max_designs": 10 },
+    "notes": "User specifies a higher max_designs count."
+  },
+  {
+    "prompt": "Design a PKS for CCCCCC(=O)O using atomatompath similarity.",
+    "expected_tool": "pks_design_retrotide",
+    "expected_args": { "smiles": "CCCCCC(=O)O", "similarity": "atomatompath" },
+    "notes": "User specifies an alternative similarity metric."
+  },
+  {
+    "prompt": "What PKS modules can make CCC(O)C(C)C(=O)CC(=O)O?",
+    "expected_tool": "pks_design_retrotide",
+    "expected_args": { "smiles": "CCC(O)C(C)C(=O)CC(=O)O" },
+    "notes": "Natural phrasing asking about PKS module architecture."
+  },
+  {
+    "prompt": "Is CCCC(=O)O a good PKS target?",
+    "expected_tool": "assess_pks_feasibility",
+    "expected_args": { "smiles": "CCCC(=O)O" },
+    "notes": "Direct feasibility question — should pre-screen before retrotide."
+  },
+  {
+    "prompt": "Assess PKS feasibility for CC(O)CC(=O)CC(=O)O.",
+    "expected_tool": "assess_pks_feasibility",
+    "expected_args": { "smiles": "CC(O)CC(=O)CC(=O)O" },
+    "notes": "Explicit pre-screening request with a polyketide-like target."
+  },
+  {
+    "prompt": "Can a PKS synthesize c1ccccc1?",
+    "expected_tool": "assess_pks_feasibility",
+    "expected_args": { "smiles": "c1ccccc1" },
+    "notes": "Benzene — should score poorly; guides user toward tridentsynth."
+  },
+  {
+    "prompt": "Check if this molecule is PKS-accessible: CC(C)CC(O)CC(=O)CC(=O)O",
+    "expected_tool": "assess_pks_feasibility",
+    "expected_args": { "smiles": "CC(C)CC(O)CC(=O)CC(=O)O" },
+    "notes": "Branched polyketide-like structure — should score well."
+  }
+]
