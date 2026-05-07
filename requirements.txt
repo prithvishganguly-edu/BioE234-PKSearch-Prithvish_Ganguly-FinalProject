@@ -3,14 +3,12 @@ google-genai
 python-dotenv
 biopython>=1.80
 pytest>=7.0
-setuptools
+setuptools<82
 mapchiral
 rdkit
 cobra
 git+https://github.com/JBEI/RetroTide.git
 requests
 beautifulsoup4
-requests
+streamlit
 dnachisel
-biopython
-setuptools
