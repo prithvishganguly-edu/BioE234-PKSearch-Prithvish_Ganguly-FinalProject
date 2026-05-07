@@ -34,13 +34,20 @@ class CheckAntiSmash:
                  "message": "The job is still processing. Please try again in 1-2 minutes."
              }
 
-        # 2. Fetch Results JSON
-        result_json_url = f"{self.results_base}/{job_id}/{job_id}.json"
-        try:
-            data_res = requests.get(result_json_url)
-            data_res.raise_for_status()
-            data = data_res.json()
-        except requests.exceptions.RequestException:
+        # 2. Fetch Results JSON — filename depends on what was uploaded,
+        #    so try <job_id>.json first, then scan the index for any .json file.
+        data = None
+        for candidate in [f"{job_id}.json", status_data.get("filename", "").replace(".fasta", ".json").replace(".gb", ".json"), "user_pks.json"]:
+            if not candidate or candidate == ".json":
+                continue
+            try:
+                r = requests.get(f"{self.results_base}/{job_id}/{candidate}")
+                if r.status_code == 200:
+                    data = r.json()
+                    break
+            except requests.exceptions.RequestException:
+                continue
+        if data is None:
             return {"error": "Job completed, but failed to fetch results JSON."}
         
         # 3. Parse PKS Data
