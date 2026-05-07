@@ -129,6 +129,15 @@ Use when the user asks to:
 - `similarity_threshold` — minimum Tanimoto score; default 0.6, lower to 0.3–0.4 for distant scaffolds
 - `max_results` — max hits to return, default 5
 
+**Presenting results — IMPORTANT: always display every hit as a formatted table or structured list. Never summarize or omit hits. For each result show ALL of these fields:**
+- `compound_name` — name of the matching compound
+- `organism` — producing organism (italicised)
+- `similarity_score` — Tanimoto score (e.g. 1.0, 0.87)
+- `source` — sbspks or mibig
+- `is_intermediate` — true/false
+- `engineering_hint` — show in full if present, never omit
+- `bgc_url` — show as a clickable link if present (e.g. "MIBiG page: https://mibig.secondarymetabolites.org/go/BGC0000094")
+
 **Interpreting results:**
 - `similarity_score` 1.0 = exact match already in database
 - `similarity_score` >0.7 = very similar scaffold, same compound family
@@ -136,7 +145,7 @@ Use when the user asks to:
 - `similarity_score` <0.4 = distantly related; mention this caveat to the user
 - `is_intermediate=true` means the match is a mid-pathway intermediate, not a final product;
   the `engineering_hint` field explains how to engineer early chain release from that pathway
-- `bgc_accession` is present only for MIBiG hits and can be used with antiSMASH
+- `bgc_url` is present only for MIBiG hits — display it as a clickable link
 - If no hits appear, suggest lowering `similarity_threshold` to 0.3
 
 ---
