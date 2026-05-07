@@ -298,12 +298,26 @@ Submits an assembled DNA sequence to the public antiSMASH server to verify domai
 ### `check_antismash`
 Polls the antiSMASH server for results and parses the detailed PKS domain architecture.
 - **Input:** The `job_id` from the submitter.
+- **Output fields:**
+  - `status` — `"completed"` when done, otherwise includes the error message
+  - `visualization_url` — direct link to the antiSMASH results page; always show this to the user
+  - `domain_predictions` — dict keyed by domain ID; each entry contains:
+    - `AT_substrate` — predicted extender unit (e.g. `"mmal"` = methylmalonyl-CoA) with `AT_confidence` (0–100)
+    - `KR_stereochemistry` — stereo type (A1, A2, B1, B2, C1, C2) if a KR domain is present
+    - `KR_activity` — `"active"` or `"inactive"`
+  - `predicted_polymer` — `polymer` (e.g. `"(Me-ohmal)"`) and `smiles` of the predicted chain extension product
+  - `pks_clusters` — BGC region hits; only populated for constructs ≥10 kb; contains `pathway_modules` and `known_cluster_hits`
+
 - **AI Actionable Steps (CRITICAL):**
-  When returning results, DO NOT just list the domains back to the user. You must act as a design validator:
-  1. **Recall the Goal:** Look at the original domains requested by RetroTide.
-  2. **Compare:** Cross-reference the required domains against the `pathway_modules` returned by antiSMASH.
-  3. **Flag Errors:** Explicitly point out discrepancies.
-  4. **Provide Visualization:** Always provide the user with the `visualization_url` to view the pathway map.
+  When returning results, DO NOT just list the domains back to the user. Act as a design validator:
+  1. **Recall the Goal:** Look at the original module architecture from RetroTide or TridentSynth.
+  2. **Compare `domain_predictions`:** Cross-reference each detected domain against what was requested.
+     - Check `AT_substrate` matches the extender unit RetroTide specified
+     - Check `KR_stereochemistry` matches the KR type (A/B)
+     - Flag any expected domain (DH, ER) that is absent
+  3. **Interpret `predicted_polymer`:** Confirm the SMILES matches the expected chain extension product for that module.
+  4. **Flag Errors:** Explicitly call out mismatches (e.g. "RetroTide requested mxmal but antiSMASH detected mmal — possible AT domain mismatch").
+  5. **Provide Visualization:** Always give the user the `visualization_url`.
 
 ---
 
