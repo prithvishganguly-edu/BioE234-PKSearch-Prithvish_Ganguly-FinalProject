@@ -150,17 +150,6 @@ Use when the user asks to:
 
 ---
 
-### `run_searchpks`
-Finds structurally similar compounds in known PKS pathways, including biosynthetic intermediates at each module step.
-- **Input:** Target SMILES (e.g. `CCCCCCC`).
-- **Workflow:** Searches a local index of 4,088 PKS-related structures (SBSPKS v2 and MIBiG) using RDKit Morgan fingerprints to compute Tanimoto similarity.
-- **Output interpretation:** Ranked similar compounds. Differentiates between "Final Products" and "Mid-Pathway Intermediates".
-- **AI Actionable Steps:** 1. If a hit is an *intermediate*, extract its Module Number and BGC Accession.
-  2. Read the "engineering hint."
-  3. Advise the user on which modules to stitch together to reach that specific state.
-
----
-
 ### `tridentsynth`
 TridentSynth Live Pathway Tool
 
@@ -262,6 +251,35 @@ Parameters:
 | acetyl-CoA | Acetyl-CoA |
 | pyruvate | pyr |
 
+### `match_design_to_parts`
+Automatically finds natural biological parts in ClusterCAD for each module in a
+RetroTide or TridentSynth PKS design, and returns amino acid sequences.
+
+**Only call this tool when the user explicitly asks for amino acid sequences,
+natural parts, or real biological components for their design.**
+
+Use when the user asks to:
+- "find natural parts for this design"
+- "get amino acid sequences for these modules"
+- "match this design to ClusterCAD"
+- "what real PKS modules match this architecture"
+
+**Input:**
+- `design` (dict) — a single design object from RetroTide or TridentSynth
+- `source` (str) — `"retrotide"` or `"tridentsynth"`
+- `max_matches_per_module` (int, default 3) — how many ClusterCAD matches per module
+
+**Output:**
+- `module_matches` — for each design module: the design domains, and an array of
+  natural matches from ClusterCAD, each with cluster accession, subunit info, and
+  amino acid sequences for every domain
+- `warnings` — any modules with no matches or failed lookups
+
+**Workflow:** Pass a single design from RetroTide (e.g., `results[0]`) or the
+TridentSynth result dict directly. The tool normalizes the different formats
+internally, queries ClusterCAD for each module, and fetches AA sequences
+automatically.
+
 ---
 
 ## 3. Assembly & Validation Tools
@@ -310,7 +328,8 @@ Polls the antiSMASH server for results and parses the detailed PKS domain archit
    - `pks_search_sbspks(smiles)` → find similar known compounds/intermediates
    - `tridentsynth(smiles)` → PKS + tailoring hybrid pathways
 4. Present results based on feasibility score
-5. For retrotide hits: `clustercad_search_domains(domain_type, annotation)` → find natural examples
+5. If user asks for amino acid sequences or natural parts:
+   `match_design_to_parts(design, source)` → ClusterCAD matches with AA sequences for each module
 6. `reverse_translate(aa_sequence, host)` → codon-optimized DNA
 7. `submit_antismash(dna)` → `check_antismash(job_id)` → validate domain architecture
 

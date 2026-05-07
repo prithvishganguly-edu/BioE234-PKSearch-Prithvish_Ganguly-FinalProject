@@ -12,6 +12,7 @@ from modules.pks.tools.reverse_translate import reverse_translate
 from modules.pks.tools.assess_pks_feasibility import assess_pks_feasibility
 from modules.pks.tools.resolve_smiles import resolve_smiles
 from modules.pks.tools.retrotide_designer import retrotide_designer
+from modules.pks.tools.match_design_to_parts import match_design_to_parts
 
 
 def test_reverse_translate():
@@ -186,3 +187,62 @@ def test_retrotide_functional_output():
     for mod in design["modules"]:
         assert "loading" in mod
         assert "domains" in mod
+
+
+# ── match_design_to_parts tests ─────────────────────────────────────
+
+
+def test_match_design_invalid_source():
+    design = {"modules": [{"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}}]}
+    with pytest.raises(ValueError, match="source must be"):
+        match_design_to_parts(design, source="invalid")
+
+
+def test_match_design_empty_design():
+    with pytest.raises(ValueError):
+        match_design_to_parts({}, source="retrotide")
+
+
+def test_match_design_none_design():
+    with pytest.raises(ValueError):
+        match_design_to_parts(None, source="retrotide")
+
+
+def test_match_design_retrotide_no_modules():
+    with pytest.raises(ValueError, match="no 'modules'"):
+        match_design_to_parts({"rank": 1}, source="retrotide")
+
+
+def test_match_design_tridentsynth_no_modules():
+    with pytest.raises(ValueError, match="no 'pks_modules'"):
+        match_design_to_parts({"ok": True}, source="tridentsynth")
+
+
+def test_match_design_invalid_max_matches():
+    design = {"modules": [{"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}}]}
+    with pytest.raises(ValueError, match="max_matches_per_module"):
+        match_design_to_parts(design, source="retrotide", max_matches_per_module=0)
+
+
+@pytest.mark.slow
+def test_match_design_retrotide_functional():
+    design = {
+        "rank": 1,
+        "similarity": 0.5,
+        "product_smiles": "CCCC(=O)O",
+        "modules": [
+            {"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}},
+        ],
+        "exact_match": False,
+    }
+    result = match_design_to_parts(design, source="retrotide", max_matches_per_module=1)
+    assert result["source"] == "retrotide"
+    assert result["total_modules"] == 1
+    assert "module_matches" in result
+    assert "warnings" in result
+    assert len(result["module_matches"]) == 1
+    match = result["module_matches"][0]
+    assert match["module_index"] == 0
+    assert match["loading"] is True
+    assert "design_domains" in match
+    assert "natural_matches" in match
