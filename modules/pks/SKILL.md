@@ -285,34 +285,44 @@ automatically.
 ## 3. Assembly & Validation Tools
 
 ### `reverse_translate`
-Converts amino acids to DNA and saves a GenBank file.
+Converts amino acids to DNA and saves a GenBank file with a proper CDS annotation.
 - **Workflow Requirement:** Before calling this tool, inform the user: "I will optimize this sequence for E. coli by default. Would you like to select a different host organism (e.g., S. coelicolor, S. albus, P. putida) before I generate the GenBank file?"
-- **Output:** Returns a success message and a file path. Tell the user the file name so they can find it in their `data/` folder.
+- **Output:** Returns `status`, `dna_sequence`, `dna_length_bp`, `file_saved_at`, and `message`. Tell the user the file name so they can find it in their `data/` folder.
+- **Warning:** If `dna_length_bp` < 1000, a `warning` key is present — tell the user the sequence is too short for antiSMASH and they should design a longer construct before submitting.
 
 ### `submit_antismash`
-Submits an assembled DNA sequence to the public antiSMASH server to verify domain architecture.
-- **Input:** A raw DNA sequence string (usually generated from `reverse_translate`). Must be at least 1000 bp — the tool will raise a ValueError for shorter sequences before submitting.
-- **Output:** Returns a `job_id`. Tell the user to wait briefly, then immediately invoke `check_antismash`.
-- **Always-on analyses:** Active Site Finder (catalytic residue annotation), KnownClusterBlast (MIBiG similarity), and Prodigal gene prediction are enabled on every submission automatically.
+Submits a DNA sequence or GenBank file to the public antiSMASH server to verify domain architecture.
+- **Inputs:**
+  - `seq` (str) — raw DNA string, minimum 1000 bp. Prodigal is used for gene prediction.
+  - `filepath` (str) — path to a GenBank `.gb` file from `reverse_translate`. **Preferred** — uses CDS annotations directly, no Prodigal needed, more accurate results.
+- **Output:** Returns a `job_id`. Tell the user to wait briefly, then immediately invoke `check_antismash` with `wait=True`.
+- **Always-on analyses:** Active Site Finder (ASF) and KnownClusterBlast (MIBiG similarity) are enabled on every submission automatically.
+- **Preferred workflow:** Pass `filepath` pointing to the GenBank saved by `reverse_translate` rather than extracting the raw DNA string.
 
 ### `check_antismash`
 Polls the antiSMASH server for results and parses the detailed PKS domain architecture.
-- **Input:** The `job_id` from the submitter.
+- **Inputs:**
+  - `job_id` (str) — the job ID from `submit_antismash`
+  - `wait` (bool, default `False`) — if `True`, polls every 15 s until done (up to `timeout_seconds`)
+  - `timeout_seconds` (int, default `300`) — max wait time when `wait=True`
+- **Always use `wait=True`** immediately after `submit_antismash` so the pipeline completes in one step without asking the user to call it again.
 - **Output fields:**
-  - `status` — `"completed"` when done, otherwise includes the error message
+  - `status` — `"completed"` when done
   - `visualization_url` — direct link to the antiSMASH results page; always show this to the user
   - `domain_predictions` — dict keyed by domain ID; each entry contains:
-    - `AT_substrate` — predicted extender unit (e.g. `"mmal"` = methylmalonyl-CoA) with `AT_confidence` (0–100)
-    - `KR_stereochemistry` — stereo type (A1, A2, B1, B2, C1, C2) if a KR domain is present
+    - `AT_substrate` — human-readable extender unit name (e.g. `"Methylmalonyl-CoA"`)
+    - `AT_substrate_code` — raw antiSMASH code (e.g. `"mmal"`) for comparison with RetroTide output
+    - `AT_confidence` — confidence score 0–100
+    - `KR_stereochemistry` — stereo type (A1, A2, B1, B2, C1, C2)
     - `KR_activity` — `"active"` or `"inactive"`
   - `predicted_polymer` — `polymer` (e.g. `"(Me-ohmal)"`) and `smiles` of the predicted chain extension product
-  - `pks_clusters` — BGC region hits; only populated for constructs ≥10 kb; contains `pathway_modules` and `known_cluster_hits`
+  - `pks_clusters` — BGC region hits; only populated for constructs ≥10 kb
 
 - **AI Actionable Steps (CRITICAL):**
   When returning results, DO NOT just list the domains back to the user. Act as a design validator:
   1. **Recall the Goal:** Look at the original module architecture from RetroTide or TridentSynth.
   2. **Compare `domain_predictions`:** Cross-reference each detected domain against what was requested.
-     - Check `AT_substrate` matches the extender unit RetroTide specified
+     - Use `AT_substrate_code` to compare directly against RetroTide's substrate codes (e.g. `mmal`, `mxmal`)
      - Check `KR_stereochemistry` matches the KR type (A/B)
      - Flag any expected domain (DH, ER) that is absent
   3. **Interpret `predicted_polymer`:** Confirm the SMILES matches the expected chain extension product for that module.
@@ -344,8 +354,9 @@ Polls the antiSMASH server for results and parses the detailed PKS domain archit
 4. Present results based on feasibility score
 5. If user asks for amino acid sequences or natural parts:
    `match_design_to_parts(design, source)` → ClusterCAD matches with AA sequences for each module
-6. `reverse_translate(aa_sequence, host)` → codon-optimized DNA
-7. `submit_antismash(dna)` → `check_antismash(job_id)` → validate domain architecture
+6. `reverse_translate(aa_sequence, host)` → codon-optimized GenBank file; check for `warning` if < 1000 bp
+7. `submit_antismash(filepath=file_saved_at)` → submit GenBank directly (preferred over raw seq)
+8. `check_antismash(job_id, wait=True)` → polls automatically, then validates domain architecture
 
 ### "Tell me about the Erythromycin PKS"
 1. `clustercad_list_clusters(reviewed_only=True)` → find accession

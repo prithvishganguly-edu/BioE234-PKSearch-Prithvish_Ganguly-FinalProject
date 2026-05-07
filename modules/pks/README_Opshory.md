@@ -72,10 +72,21 @@ If an unrecognized host is provided, falls back to *E. coli* and notifies the us
 {
   "status": "success",
   "dna_sequence": "ATGGTCGCC...",
+  "dna_length_bp": 4356,
   "file_saved_at": "modules/pks/data/synthetic_pks.gb",
   "message": "Sequence optimized for s_coelicolor and saved to synthetic_pks.gb."
 }
 ```
+
+If the output is under 1000 bp a `warning` key is added:
+
+```json
+{
+  "warning": "Output is only 9 bp. antiSMASH requires a minimum of 1000 bp — this sequence will be rejected if submitted directly."
+}
+```
+
+The GenBank file includes a proper `CDS` feature with an embedded `translation` qualifier, so antiSMASH can use the annotation directly without running Prodigal.
 
 ### Example usage
 
@@ -97,9 +108,12 @@ The sequence is wrapped in FASTA format and uploaded to the antiSMASH v1.0 REST 
 
 ### Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `seq` | string | Raw DNA sequence string to analyze (minimum 1000 bp) |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `seq` | string | `""` | Raw DNA sequence string to analyze (minimum 1000 bp) |
+| `filepath` | string | `""` | Path to a GenBank `.gb` file to upload directly |
+
+Provide either `seq` or `filepath` — not both. When `filepath` is given the GenBank CDS annotations are used as-is (no Prodigal), which gives more accurate domain calls and faster results.
 
 ### Output
 
@@ -110,13 +124,14 @@ The sequence is wrapped in FASTA format and uploaded to the antiSMASH v1.0 REST 
 ### Example usage
 
 ```
-User: Submit this DNA to antiSMASH: ATGAAACGT...
-
+# Submit raw DNA
 Gemini calls: submit_antismash(seq="ATGAAACGT...")
-→ Returns job ID, then immediately calls check_antismash
+
+# Submit GenBank file directly (preferred when reverse_translate output is available)
+Gemini calls: submit_antismash(filepath="modules/pks/data/synthetic_pks.gb")
 ```
 
-> **Note:** The tool accepts raw DNA strings only. NCBI accession numbers and MIBiG BGC accessions are not currently supported as direct inputs.
+> **Note:** NCBI accession numbers and MIBiG BGC accessions are not supported as inputs.
 
 ---
 
@@ -126,9 +141,11 @@ Polls the antiSMASH server for job status and, when complete, parses the results
 
 ### Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `job_id` | string | The job ID returned by `submit_antismash` |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `job_id` | string | required | The job ID returned by `submit_antismash` |
+| `wait` | bool | `False` | If `True`, polls every 15 s until the job completes or times out |
+| `timeout_seconds` | int | `300` | Max seconds to wait when `wait=True` |
 
 ### Output (job still running)
 
@@ -147,7 +164,8 @@ Polls the antiSMASH server for job status and, when complete, parses the results
   "visualization_url": "https://antismash.secondarymetabolites.org/upload/<job_id>/index.html",
   "domain_predictions": {
     "nrpspksdomains_ctg1_1_PKS_AT.1": {
-      "AT_substrate": "mmal",
+      "AT_substrate": "Methylmalonyl-CoA",
+      "AT_substrate_code": "mmal",
       "AT_confidence": 100.0
     },
     "nrpspksdomains_ctg1_1_PKS_KR.1": {
@@ -169,7 +187,8 @@ Polls the antiSMASH server for job status and, when complete, parses the results
 |-------|-------------|
 | `visualization_url` | Direct link to the antiSMASH results page |
 | `domain_predictions` | Per-domain annotations keyed by antiSMASH domain ID |
-| `domain_predictions[*].AT_substrate` | Predicted extender unit (e.g. `mmal` = methylmalonyl-CoA) |
+| `domain_predictions[*].AT_substrate` | Human-readable extender unit name (e.g. `"Methylmalonyl-CoA"`) |
+| `domain_predictions[*].AT_substrate_code` | Raw antiSMASH code (e.g. `"mmal"`) for programmatic use |
 | `domain_predictions[*].AT_confidence` | Confidence score 0–100 |
 | `domain_predictions[*].KR_stereochemistry` | KR stereo type: A1, A2, B1, B2, C1, or C2 |
 | `domain_predictions[*].KR_activity` | `"active"` or `"inactive"` |
@@ -182,9 +201,11 @@ Polls the antiSMASH server for job status and, when complete, parses the results
 ### Example usage
 
 ```
-User: Check antiSMASH job bacteria-1abc9db1-...
-
+# One-shot check
 Gemini calls: check_antismash(job_id="bacteria-1abc9db1-4f2e-4ab3-a5dd-21210cb2f4b8")
+
+# Wait up to 5 minutes for completion automatically
+Gemini calls: check_antismash(job_id="bacteria-1abc9db1-...", wait=True, timeout_seconds=300)
 ```
 
 ### Validation workflow (AI behavior)
