@@ -1,7 +1,7 @@
 {
   "id": "org.bioe234.function.pks.clustercad_search_domains.v1",
   "name": "ClusterCAD Search Domains",
-  "description": "Search all PKS clusters in ClusterCAD for modules containing domains matching specified type and annotation criteria using a local cache for fast lookup. Common substrate names are automatically translated to ClusterCAD annotation terms.",
+  "description": "Search all 531 PKS clusters in ClusterCAD for modules containing domains matching specified criteria using a local cache for fast lookup. Common substrate names are automatically translated to ClusterCAD annotation terms.",
   "type": "function",
   "keywords": ["PKS", "polyketide synthase", "ClusterCAD", "domain", "search", "AT", "KS", "KR", "substrate", "annotation"],
   "date_created": null,
@@ -11,18 +11,61 @@
     {
       "name": "domain_type",
       "type": "string",
-      "description": "Domain type to search for. Valid types: AT, KS, KR, DH, ER, ACP, TE, KS, C, A, PCP. Case insensitive."
+      "description": "Primary domain type to search for (e.g. 'AT', 'KS', 'KR', 'DH', 'ER', 'ACP'). Case insensitive.",
+      "optional": true
     },
     {
       "name": "annotation_contains",
       "type": "string",
-      "description": "Optional text to search for in domain annotations. Common names are auto-translated: malonyl→mal, methylmalonyl→mmal, ethylmalonyl→emal, butyryl/butylmalonyl→butmal, hexylmalonyl→hxmal, hydroxymalonyl→hmal, methoxymalonyl→mxmal, isobutyryl→isobut, propionyl→prop, acetyl→Acetyl-CoA, pyruvate→pyr. You can also search for 'loading', 'non-loading', 'active', 'inactive'. Case insensitive.",
+      "description": "Optional text to search for in domain annotations. Common names are auto-translated: malonyl→mal, methylmalonyl→mmal, ethylmalonyl→emal, butyryl/butylmalonyl→butmal, hexylmalonyl→hxmal, hydroxymalonyl→hmal, methoxymalonyl→mxmal, isobutyryl→isobut, propionyl→prop, acetyl→Acetyl-CoA, pyruvate→pyr. You can also search for 'loading', 'non-loading', 'active', 'inactive'.",
+      "optional": true
+    },
+    {
+      "name": "domain_types",
+      "type": "array",
+      "description": "Optional list of domain types that must ALL be present in the module (e.g. ['KR', 'DH', 'ER'] finds modules with all three). Use this to find modules with specific domain combinations.",
+      "optional": true
+    },
+    {
+      "name": "exclude_annotation",
+      "type": "string",
+      "description": "Optional text to exclude domains with this annotation (e.g. 'inactive' to exclude inactive domains).",
+      "optional": true
+    },
+    {
+      "name": "active_only",
+      "type": "boolean",
+      "description": "If true, only return domains that are not annotated as inactive. Defaults to false.",
       "optional": true
     },
     {
       "name": "loading_module_only",
       "type": "boolean",
       "description": "If true, only return results from loading modules (module 0). Defaults to false.",
+      "optional": true
+    },
+    {
+      "name": "cluster_description_contains",
+      "type": "string",
+      "description": "Optional text to filter results by cluster name (e.g. 'erythromycin' to only search within erythromycin clusters).",
+      "optional": true
+    },
+    {
+      "name": "min_modules",
+      "type": "integer",
+      "description": "Only return clusters with at least this many total modules. Useful for finding complex PKS assemblies.",
+      "optional": true
+    },
+    {
+      "name": "max_modules",
+      "type": "integer",
+      "description": "Only return clusters with at most this many total modules. Useful for finding simpler PKS assemblies.",
+      "optional": true
+    },
+    {
+      "name": "reviewed_only",
+      "type": "boolean",
+      "description": "If true, only search manually reviewed clusters. Defaults to false.",
       "optional": true
     },
     {
@@ -34,7 +77,7 @@
     {
       "name": "force_refresh",
       "type": "boolean",
-      "description": "If true, re-downloads all cluster data and rebuilds the cache. Use this if the database has been updated. Defaults to false.",
+      "description": "If true, re-downloads all cluster data and rebuilds the cache. Use if the database has been updated. Defaults to false.",
       "optional": true
     }
   ],
@@ -42,7 +85,7 @@
   "outputs": [
     {
       "type": "array",
-      "description": "List of matching results, each with 'accession', 'description', 'subunit_name', 'subunit_id', 'module', 'product_smiles', and 'matching_domains'."
+      "description": "List of matching results, each with 'accession', 'description', 'subunit_name', 'subunit_id', 'module', 'total_modules', 'product_smiles', 'all_domains', and 'matching_domains'."
     }
   ],
 
@@ -56,17 +99,18 @@
       "output": {
         "result": [
           {
-            "accession": "BGC0001492.1",
-            "description": "Abyssomicin",
-            "subunit_name": "AbsB1",
-            "subunit_id": "24119",
-            "module": "module 0",
-            "product_smiles": "CC(=O)[S]",
+            "accession": "BGC0000135.1",
+            "description": "Reveromycin",
+            "subunit_name": "revB",
+            "subunit_id": "13908",
+            "module": "module 4",
+            "total_modules": 7,
+            "product_smiles": "CCCC...",
             "matching_domains": [
               {
                 "domain_type": "AT",
-                "domain_id": "27717",
-                "annotation": "substrate butmal, loading"
+                "domain_id": "16110",
+                "annotation": "substrate butmal, non-loading"
               }
             ]
           }
@@ -75,29 +119,12 @@
     },
     {
       "input": {
-        "domain_type": "AT",
-        "annotation_contains": "malonyl",
-        "loading_module_only": true,
+        "domain_types": ["KR", "DH", "ER"],
+        "active_only": true,
         "max_results": 5
       },
       "output": {
-        "result": [
-          {
-            "accession": "BGC0001244.1",
-            "description": "(-)-Mellein",
-            "subunit_name": "mlnS",
-            "subunit_id": "20069",
-            "module": "module 0",
-            "product_smiles": "CC(=O)[S]",
-            "matching_domains": [
-              {
-                "domain_type": "AT",
-                "domain_id": "23438",
-                "annotation": "substrate mal, loading"
-              }
-            ]
-          }
-        ]
+        "result": []
       }
     }
   ],
