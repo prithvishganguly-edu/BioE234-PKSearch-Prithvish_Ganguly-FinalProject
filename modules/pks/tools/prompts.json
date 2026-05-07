@@ -39,7 +39,7 @@
     "prompt": "Submit this DNA sequence to antiSMASH to check the PKS domains. Sequence: ATGCGT",
     "expected_tool": "submit_antismash",
     "expected_args": { "seq": "ATGCGT" },
-    "notes": "Tests API submission."
+    "notes": "Tests API submission. Note: this sequence is <1000 bp so the tool will raise a ValueError before submitting — expected behavior."
   },
   {
     "prompt": "Check the status of my antiSMASH job ID 12345.",
