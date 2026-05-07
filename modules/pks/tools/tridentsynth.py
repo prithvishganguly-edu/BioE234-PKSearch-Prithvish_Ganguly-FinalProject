@@ -611,58 +611,142 @@ class TridentSynth:
 
         return list(dict.fromkeys(enthalpies))
 
+    def _section_between(
+        self,
+        text: str,
+        start_pattern: str,
+        end_pattern: str,
+    ) -> str:
+        match = re.search(
+            start_pattern + r"(.*?)" + end_pattern,
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if match:
+            return match.group(1).strip()
+        return ""
+
+    def _explicit_summary_value(self, lines: list[str], label: str) -> Optional[str]:
+        """
+        Parse only exact label/value pairs from the Synthesis parameters section.
+        This avoids Gemini or the parser guessing from nearby molecule text.
+        """
+        label_clean = self._clean(label).rstrip(":")
+
+        for i, line in enumerate(lines):
+            current = self._clean(line).rstrip(":")
+            if current == label_clean and i + 1 < len(lines):
+                value = lines[i + 1].strip("` ").strip()
+                return value or None
+
+        return None
+
+    def _explicit_first_smiles_after_label(self, text: str, label: str) -> Optional[str]:
+        """
+        Parse a SMILES value only when it appears directly after a known result label,
+        such as 'PKS product' or 'Post-PKS product'.
+        """
+        label_pattern = re.escape(label)
+
+        patterns = [
+            rf"{label_pattern}\s*`([^`]+)`",
+            rf"{label_pattern}\s*\n\s*([A-Za-z0-9@\+\-\[\]\(\)=#$\\/%\.:]+)",
+            rf"{label_pattern}\s*:\s*([A-Za-z0-9@\+\-\[\]\(\)=#$\\/%\.:]+)",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if match:
+                value = match.group(1).strip("` ").strip()
+                if self._looks_like_smiles(value):
+                    return value
+
+        return None
+
+    def _explicit_similarity_after_label(self, text: str, label: str) -> Optional[float]:
+        """
+        Parse similarity values only from the specific labeled area.
+        """
+        pattern = rf"{re.escape(label)}.*?similarity to target.*?([0-9]+(?:\.[0-9]+)?)"
+        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+
+        if not match:
+            return None
+
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+
+    def _explicit_net_feasibility(self, text: str) -> Optional[float]:
+        match = re.search(
+            r"Net feasibility\s*([0-9]+(?:\.[0-9]+)?)",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return None
+
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+    
     def _parse_result_page(self, html: str, task_id: Optional[str]) -> dict[str, Any]:
         soup = BeautifulSoup(html, "html.parser")
         lines = self._text_lines(soup)
         full_text = soup.get_text("\n", strip=True)
+
+        # Explicitly isolate the first/best pathway block.
         best_block = self._extract_best_pathway_block(full_text)
 
-        target_smiles = self._value_after_label(lines, "Target SMILES")
-        target_name = self._value_after_label(lines, "Target Name")
-        pathway_sequence = self._value_after_label(lines, "Pathway Sequence")
-        pks_termination_step = self._value_after_label(lines, "PKS Termination Step")
-        pks_extenders = self._value_after_label(lines, "PKS Extenders")
-        pks_starters = self._value_after_label(lines, "PKS Starters")
-        bio_steps = self._value_after_label(lines, "# Bio Steps")
-        chem_steps = self._value_after_label(lines, "# Chem Steps")
-        job_id = self._value_after_label(lines, "Job Id") or task_id
+        # These fields come only from exact Synthesis parameter labels.
+        target_smiles = self._explicit_summary_value(lines, "Target SMILES")
+        target_name = self._explicit_summary_value(lines, "Target Name")
+        pathway_sequence = self._explicit_summary_value(lines, "Pathway Sequence")
+        pks_termination_step = self._explicit_summary_value(lines, "PKS Termination Step")
+        pks_extenders = self._explicit_summary_value(lines, "PKS Extenders")
+        pks_starters = self._explicit_summary_value(lines, "PKS Starters")
+        bio_steps = self._explicit_summary_value(lines, "# Bio Steps")
+        chem_steps = self._explicit_summary_value(lines, "# Chem Steps")
+        job_id = self._explicit_summary_value(lines, "Job Id") or task_id
 
-        pks_product = self._extract_product_smiles(best_block, "PKS product")
-        post_pks_product = self._extract_product_smiles(best_block, "Post-PKS product")
+        # These fields come only from the first/best pathway block.
+        pks_product = self._explicit_first_smiles_after_label(best_block, "PKS product")
+        post_pks_product = self._explicit_first_smiles_after_label(best_block, "Post-PKS product")
 
-        similarity_matches = re.findall(
-            r"similarity to target.*?([0-9]+(?:\.[0-9]+)?)",
-            best_block,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
+        pks_similarity = self._explicit_similarity_after_label(best_block, "PKS product")
+        post_pks_similarity = self._explicit_similarity_after_label(best_block, "Post-PKS product")
 
-        pks_similarity = float(similarity_matches[0]) if len(similarity_matches) >= 1 else None
-        post_pks_similarity = float(similarity_matches[1]) if len(similarity_matches) >= 2 else None
+        net_feasibility = self._explicit_net_feasibility(best_block)
 
-        net_feasibility = self._extract_float_after_label(best_block, "Net feasibility")
-
+        # Reaction information comes only from the Reactions (SMILES) section
+        # inside the best pathway block.
         reaction_smiles = self._extract_reaction_smiles(best_block)
 
-        # Fallback safety: for pages where pathway sections are not clearly separated,
-        # only keep the first/top reaction so alternative reactions do not flood output.
+        # Keep only the top/best reaction if the page includes alternatives.
         if len(reaction_smiles) > 1:
             reaction_smiles = reaction_smiles[:1]
 
         reaction_structures = [self._reaction_to_structures(rxn) for rxn in reaction_smiles]
 
+        # Reaction rule information comes only from the Reaction rules section.
         reaction_rule_ids = self._unique_ordered(re.findall(r"rule\d+_\d+", best_block))
         reaction_rule_names = self._extract_reaction_rule_names(best_block)
         reaction_enthalpies = self._extract_reaction_enthalpies(best_block)
 
+        # PKS modules come only from the first module set.
         pks_modules = self._extract_pks_modules(full_text)
         domain_legend = self._extract_domain_legend(full_text)
 
+        # Step feasibility values come only from the Step feasibilities section.
         step_feasibilities: list[float] = []
         step_section = re.search(
-            r"Step feasibilities(.*?)(Pathway \d+|Full pathway design #\d+|$)",
+            r"Step feasibilities\s*(.*?)(Net feasibility|Full pathway design #\d+|Pathway \d+|$)",
             best_block,
             flags=re.IGNORECASE | re.DOTALL,
         )
+
         if step_section:
             for raw in re.findall(r"(?<!rule)(?<!\d)(0\.\d+|1\.0+|1)(?!\d)", step_section.group(1)):
                 try:
@@ -670,6 +754,11 @@ class TridentSynth:
                 except ValueError:
                     pass
 
+        # Pathway structures are derived only from:
+        # 1. parsed PKS product
+        # 2. reactants/products in the selected reaction SMILES
+        # 3. parsed post-PKS product
+        # 4. parsed target SMILES
         structure_values: list[Optional[str]] = [pks_product]
 
         for rxn_struct in reaction_structures:
@@ -723,13 +812,155 @@ class TridentSynth:
             },
         }
 
+    def _build_text_summary(self, parsed: dict[str, Any], submitted_query: dict[str, Any]) -> str:
+        params = parsed.get("synthesis_parameters", {})
+        best = parsed.get("best_pathway", {})
+
+        target = submitted_query.get("target_smiles") or params.get("target_smiles")
+        pathway_sequence = params.get("pathway_sequence")
+        pks_termination = params.get("pks_termination_step")
+        pks_extenders = params.get("pks_extenders")
+        pks_starters = params.get("pks_starters")
+
+        selected_steps = parsed.get("selected_steps", {})
+        chem_steps = selected_steps.get("chem_steps")
+        bio_steps = selected_steps.get("bio_steps")
+
+        pks_modules = parsed.get("pks_modules", [])
+        reaction_smiles = best.get("reaction_smiles", [])
+        reaction_rule_names = best.get("reaction_rule_names", [])
+        reaction_enthalpies = best.get("reaction_enthalpies", [])
+        pathway_structures = best.get("pathway_structures_smiles", [])
+
+        lines: list[str] = []
+
+        lines.append("TridentSynth result")
+        lines.append(f"- Target SMILES: {target}")
+        lines.append(f"- Strategy: {pathway_sequence}")
+
+        if pks_termination:
+            lines.append(f"- PKS termination: {pks_termination}")
+
+        if pks_starters:
+            lines.append(f"- PKS starters: {pks_starters}")
+
+        if pks_extenders:
+            lines.append(f"- PKS extenders: {pks_extenders}")
+
+        step_parts = []
+        if bio_steps is not None:
+            step_parts.append(f"Bio steps: {bio_steps}")
+        if chem_steps is not None:
+            step_parts.append(f"Chemical steps: {chem_steps}")
+        if step_parts:
+            lines.append(f"- Selected steps: {', '.join(step_parts)}")
+
+        if pks_modules:
+            lines.append("")
+            lines.append("PKS modules:")
+            for module in pks_modules:
+                summary = module.get("text_summary")
+                if summary:
+                    lines.append(f"- {summary}")
+
+        lines.append("")
+        lines.append("Best pathway:")
+        lines.append(f"- PKS product SMILES: {best.get('pks_product_smiles')}")
+        lines.append(f"- PKS similarity to target: {best.get('pks_similarity_to_target')}")
+        lines.append(f"- Final product SMILES: {best.get('post_pks_product_smiles')}")
+        lines.append(f"- Final product similarity to target: {best.get('post_pks_similarity_to_target')}")
+
+        if reaction_smiles:
+            lines.append(f"- Reaction SMILES: {reaction_smiles[0]}")
+
+        reaction_details = []
+        if reaction_rule_names:
+            reaction_details.append(f"rule = {reaction_rule_names[0]}")
+        if reaction_enthalpies:
+            reaction_details.append(f"enthalpy = {reaction_enthalpies[0]}")
+        if reaction_details:
+            lines.append(f"- Reaction details: {', '.join(reaction_details)}")
+
+        if pathway_structures:
+            lines.append(f"- Pathway structures SMILES: {', '.join(pathway_structures)}")
+
+        return "\n".join(lines)
+    
     def _add_selected_steps(self, parsed: dict[str, Any], submitted_query: dict[str, Any]) -> dict[str, Any]:
         params = parsed.get("synthesis_parameters", {})
+        best_pathway = parsed.get("best_pathway", {})
+
+        submitted_target = (submitted_query.get("target_smiles") or "").strip()
+
+        if submitted_target:
+            params["target_smiles"] = submitted_target
+
+        selected_strategies = []
+        if submitted_query.get("use_pks"):
+            selected_strategies.append("PKS")
+        if submitted_query.get("use_bio"):
+            selected_strategies.append("Bio")
+        if submitted_query.get("use_chem"):
+            selected_strategies.append("Chemical synthesis")
+
+        params["pathway_sequence"] = ", ".join(selected_strategies)
 
         parsed["selected_steps"] = {
             "bio_steps": params.get("bio_steps") if submitted_query.get("use_bio") else None,
             "chem_steps": params.get("chem_steps") if submitted_query.get("use_chem") else None,
         }
+
+        reaction_structures = best_pathway.get("reaction_structures", []) or []
+
+        reaction_reactants: list[str] = []
+        reaction_products: list[str] = []
+
+        for rxn_struct in reaction_structures:
+            if not isinstance(rxn_struct, dict):
+                continue
+
+            for reactant in rxn_struct.get("reactants", []) or []:
+                if isinstance(reactant, str) and self._looks_like_smiles(reactant):
+                    reaction_reactants.append(reactant)
+
+            for product in rxn_struct.get("products", []) or []:
+                if isinstance(product, str) and self._looks_like_smiles(product):
+                    reaction_products.append(product)
+
+        post_pks_similarity = best_pathway.get("post_pks_similarity_to_target")
+        try:
+            post_pks_similarity_float = float(post_pks_similarity)
+        except (TypeError, ValueError):
+            post_pks_similarity_float = None
+
+        target_is_reaction_product = submitted_target in reaction_products
+        target_is_exact_match = (
+            post_pks_similarity_float is not None
+            and abs(post_pks_similarity_float - 1.0) < 1e-9
+        )
+
+        if submitted_target and (target_is_reaction_product or target_is_exact_match):
+            best_pathway["post_pks_product_smiles"] = submitted_target
+
+        structure_values: list[Optional[str]] = []
+
+        pks_product = best_pathway.get("pks_product_smiles")
+        if isinstance(pks_product, str):
+            structure_values.append(pks_product)
+
+        structure_values.extend(reaction_reactants)
+        structure_values.extend(reaction_products)
+
+        post_pks_product = best_pathway.get("post_pks_product_smiles")
+        if isinstance(post_pks_product, str):
+            structure_values.append(post_pks_product)
+
+        best_pathway["pathway_structures_smiles"] = self._unique_ordered(structure_values)
+
+        parsed["synthesis_parameters"] = params
+        parsed["best_pathway"] = best_pathway
+
+        parsed["text_summary"] = self._build_text_summary(parsed, submitted_query)
 
         return parsed
 

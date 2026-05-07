@@ -1,0 +1,50 @@
+{
+  "id": "org.bioe234.function.pks.clustercad_domain_lookup.v1",
+  "name": "ClusterCAD Domain Lookup",
+  "description": "Retrieve the amino acid sequence and annotations for a specific PKS domain from ClusterCAD using its domain ID. Use clustercad_get_subunits first to find domain IDs.",
+  "type": "function",
+  "keywords": ["PKS", "polyketide synthase", "ClusterCAD", "domain", "amino acid", "sequence", "AT", "KS", "KR", "ACP"],
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "domain_id",
+      "type": "integer",
+      "description": "Numeric domain ID from ClusterCAD (e.g. 27717). Use clustercad_get_subunits to find valid domain IDs for a cluster."
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "object",
+      "description": "Domain details including 'domain_id', 'name', 'start', 'stop', 'annotations', and 'AAsequence' (amino acid sequence)."
+    }
+  ],
+
+  "examples": [
+    {
+      "input": { "domain_id": 27717 },
+      "output": {
+        "result": {
+          "domain_id": 27717,
+          "name": "Abyssomicin subunit AbsB1 module 0: AT domain",
+          "start": "100",
+          "stop": "500",
+          "annotations": "substrate mal, loading",
+          "AAsequence": "MGSSHHHHHHSSGLVPRGSH..."
+        }
+      }
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/clustercad_domain_lookup.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+    "mcp_name": "clustercad_domain_lookup",
+    "seq_params": []
+  }
+}
