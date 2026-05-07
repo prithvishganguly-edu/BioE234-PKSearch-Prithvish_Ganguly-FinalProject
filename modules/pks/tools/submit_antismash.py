@@ -17,9 +17,13 @@ class SubmitAntiSmash:
         """Submit sequence to antiSMASH API and return Job ID."""
         if not seq:
             raise ValueError("Sequence cannot be empty.")
+        if len(seq) < 1000:
+            raise ValueError(f"Sequence is too short ({len(seq)} bp). antiSMASH requires a minimum of 1000 bp.")
 
         payload = {
             "email": "opshoryc@berkeley.edu",
+            "asf": "true",
+            "knownclusterblast": "true",
         }
 
         # antiSMASH v1.0 expects the FASTA upload under the field name "seq"
