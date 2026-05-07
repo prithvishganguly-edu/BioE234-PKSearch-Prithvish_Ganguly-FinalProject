@@ -76,6 +76,7 @@ class ReverseTranslate:
         optimized_dna = problem.sequence
         
         # 3. Create GenBank Record with BioPython
+        protein_seq = str(Seq(optimized_dna).translate(to_stop=True))
         record = SeqRecord(
             Seq(optimized_dna),
             id="SYNTH_PKS",
@@ -83,13 +84,19 @@ class ReverseTranslate:
             description=f"Codon optimized for {actual_host_used} using DnaChisel",
             annotations={"molecule_type": "DNA"}
         )
-        
-        full_feature = SeqFeature(
-            FeatureLocation(0, len(optimized_dna)), 
-            type="misc_feature", 
-            qualifiers={"label": "Optimized PKS Sequence"}
+
+        cds_feature = SeqFeature(
+            FeatureLocation(0, len(optimized_dna)),
+            type="CDS",
+            qualifiers={
+                "label": "Optimized PKS Sequence",
+                "product": "synthetic PKS module",
+                "transl_table": "11",
+                "codon_start": "1",
+                "translation": protein_seq,
+            }
         )
-        record.features.append(full_feature)
+        record.features.append(cds_feature)
         
         # 4. Save the file
         file_path = os.path.join(self.data_dir, filename)

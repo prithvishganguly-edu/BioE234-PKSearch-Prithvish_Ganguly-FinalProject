@@ -53,47 +53,74 @@ class CheckAntiSmash:
         # 3. Parse PKS Data
         parsed_results = {
             "status": "completed",
-            "visualization_url": f"{self.results_base}/{job_id}/index.html", 
-            "pks_clusters": []
+            "visualization_url": f"{self.results_base}/{job_id}/index.html",
+            "pks_clusters": [],
+            "domain_predictions": {},
+            "predicted_polymer": None,
         }
-        
+
         records = data.get("records", [])
         if not records:
             return parsed_results
 
-        for region in records[0].get("regions", []):
+        rec = records[0]
+        nrps_pks = rec.get("modules", {}).get("antismash.modules.nrps_pks", {})
+
+        # Always surface domain-level predictions regardless of BGC region calls.
+        # This is critical for short constructs (<10 kb) that antiSMASH won't assign
+        # to a region but still annotates at the domain level.
+        domain_preds = nrps_pks.get("domain_predictions", {})
+        for domain_id, pred in domain_preds.items():
+            summary = {}
+            if "signature" in pred:
+                top = sorted(pred["signature"].get("predictions", {}).items(),
+                             key=lambda x: x[1][2] if isinstance(x[1], list) else 0,
+                             reverse=True)
+                if top:
+                    summary["AT_substrate"] = top[0][0]
+                    summary["AT_confidence"] = round(top[0][1][2], 1) if isinstance(top[0][1], list) else None
+            if "kr_stereochem" in pred:
+                summary["KR_stereochemistry"] = pred["kr_stereochem"].get("prediction")
+            if "kr_activity" in pred:
+                summary["KR_activity"] = pred["kr_activity"].get("prediction")
+            if summary:
+                parsed_results["domain_predictions"][domain_id] = summary
+
+        # Predicted polymer SMILES from region_predictions
+        region_preds = nrps_pks.get("region_predictions", {})
+        if region_preds:
+            first = next(iter(region_preds.values()))
+            if first:
+                parsed_results["predicted_polymer"] = {
+                    "polymer": first[0].get("polymer"),
+                    "smiles": first[0].get("smiles"),
+                }
+
+        # BGC region clusters (populated for full-length constructs)
+        for region in rec.get("regions", []):
             products = region.get("products", [])
-            
-            # Look for PKS signatures
-            if any("pks" in p.lower() for p in products):
+            if any("pks" in p.lower() or "nrps" in p.lower() for p in products):
                 cluster_info = {
                     "type": products,
                     "location": f"Base pairs {region.get('start')} to {region.get('end')}",
                     "pathway_modules": [],
-                    "known_cluster_hits": []
+                    "known_cluster_hits": [],
                 }
-                
-                # Extract modules and domains
-                cand_modules = records[0].get("modules", {}).get("antismash.modules.nrps_pks", {})
-                for mod in cand_modules.get("modules", []):
+                for mod in nrps_pks.get("modules", []):
                     if mod.get("start", 0) >= region.get("start", 0) and mod.get("end", 0) <= region.get("end", 0):
-                        module_detail = {
+                        cluster_info["pathway_modules"].append({
                             "module_number": mod.get("module_number", "Unknown"),
                             "domains": [d.get("name") for d in mod.get("domains", [])],
-                            "predicted_substrate": mod.get("predictions", {}).get("specificity", "Unknown") 
-                        }
-                        cluster_info["pathway_modules"].append(module_detail)
-
-                # Extract MIBiG hits
+                            "predicted_substrate": mod.get("predictions", {}).get("specificity", "Unknown"),
+                        })
                 known_hits = region.get("knownclusterblast", {}).get("hits", [])
-                for hit in known_hits[:3]: 
-                     cluster_info["known_cluster_hits"].append({
-                         "name": hit.get("name"),
-                         "similarity": f"{hit.get('similarity_score', 0)}%"
-                     })
-                     
+                for hit in known_hits[:3]:
+                    cluster_info["known_cluster_hits"].append({
+                        "name": hit.get("name"),
+                        "similarity": f"{hit.get('similarity_score', 0)}%",
+                    })
                 parsed_results["pks_clusters"].append(cluster_info)
-                
+
         return parsed_results
 
 _instance = CheckAntiSmash()
