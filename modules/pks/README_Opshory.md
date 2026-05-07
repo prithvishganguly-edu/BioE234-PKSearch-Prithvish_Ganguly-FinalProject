@@ -143,13 +143,41 @@ Polls the antiSMASH server for job status and, when complete, parses the results
 
 ```json
 {
-  "status": "done",
+  "status": "completed",
   "visualization_url": "https://antismash.secondarymetabolites.org/upload/<job_id>/index.html",
-  "pks_clusters": [ ... ]
+  "domain_predictions": {
+    "nrpspksdomains_ctg1_1_PKS_AT.1": {
+      "AT_substrate": "mmal",
+      "AT_confidence": 100.0
+    },
+    "nrpspksdomains_ctg1_1_PKS_KR.1": {
+      "KR_stereochemistry": "B2",
+      "KR_activity": "active"
+    }
+  },
+  "predicted_polymer": {
+    "polymer": "(Me-ohmal)",
+    "smiles": "C(C)C(O)C(=O)O"
+  },
+  "pks_clusters": []
 }
 ```
 
-The `pks_clusters` array contains detected BGCs with their module/domain breakdown, AT substrate predictions (with confidence scores), KR stereochemistry calls, and predicted polymer SMILES.
+### Output fields explained
+
+| Field | Description |
+|-------|-------------|
+| `visualization_url` | Direct link to the antiSMASH results page |
+| `domain_predictions` | Per-domain annotations keyed by antiSMASH domain ID |
+| `domain_predictions[*].AT_substrate` | Predicted extender unit (e.g. `mmal` = methylmalonyl-CoA) |
+| `domain_predictions[*].AT_confidence` | Confidence score 0–100 |
+| `domain_predictions[*].KR_stereochemistry` | KR stereo type: A1, A2, B1, B2, C1, or C2 |
+| `domain_predictions[*].KR_activity` | `"active"` or `"inactive"` |
+| `predicted_polymer.polymer` | Shorthand name of the predicted chain extension product |
+| `predicted_polymer.smiles` | SMILES of that product |
+| `pks_clusters` | BGC region hits — only populated for constructs ≥10 kb |
+
+> **Note:** `domain_predictions` and `predicted_polymer` are always returned for any construct where PKS domains are detected, even short single-module fragments that don't trigger BGC region calling. `pks_clusters` will be empty for constructs under ~10 kb.
 
 ### Example usage
 
@@ -162,10 +190,14 @@ Gemini calls: check_antismash(job_id="bacteria-1abc9db1-4f2e-4ab3-a5dd-21210cb2f
 ### Validation workflow (AI behavior)
 
 When results come back, Gemini should:
-1. Recall the original domain architecture requested by RetroTide
-2. Cross-reference it against the domains antiSMASH detected
-3. Flag any discrepancies (missing KR, unexpected AT substrate, etc.)
-4. Provide the `visualization_url` so the user can inspect the annotated map
+1. Recall the original module architecture from RetroTide or TridentSynth
+2. Compare `domain_predictions` against what was requested:
+   - Does `AT_substrate` match the extender unit RetroTide specified?
+   - Does `KR_stereochemistry` match the KR type (A/B)?
+   - Are any expected domains (DH, ER) absent?
+3. Interpret `predicted_polymer` — does the SMILES match the expected chain extension for that module?
+4. Flag any mismatches explicitly
+5. Provide the `visualization_url` so the user can inspect the annotated map
 
 ---
 
@@ -184,4 +216,8 @@ pytest tests/test_tools.py -v -k "reverse_translate"
 | antiSMASH endpoint was on dead `/api/v2.0/` path | Updated to `/api/v1.0/` |
 | Submission field was `seqfile`; API expects `seq` | Corrected field name |
 | Status check compared against `"completed"`; API returns `"done"` | Added `"done"` to accepted statuses |
-| Submitted raw DNA without CDS annotation → "all records skipped" | Added ATG/TAA flanking and a proper CDS feature when submitting GenBank files |
+| `genefinder` defaulted to `none` → "all records skipped" for FASTA input | Added `genefinder: prodigal` to payload |
+| Result JSON named after uploaded file, not job ID | `check_antismash` now tries multiple candidate filenames |
+| `reverse_translate` emitted `misc_feature`; antiSMASH ignores it | Changed to `CDS` feature with embedded translation |
+| `check_antismash` only parsed BGC regions → empty output for short constructs | Now always parses `nrps_pks` domain predictions and polymer SMILES directly |
+| Sequences under 1000 bp submitted silently and failed server-side | Added client-side length check with clear error message |
