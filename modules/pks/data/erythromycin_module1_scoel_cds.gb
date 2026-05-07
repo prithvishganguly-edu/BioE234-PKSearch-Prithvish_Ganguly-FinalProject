@@ -1,0 +1,114 @@
+LOCUS       DEBS_MOD1               4362 bp    DNA     linear   UNK 01-JAN-1980
+DEFINITION  DEBS module 1 codon-optimized for S. coelicolor.
+ACCESSION   DEBS_MOD1
+VERSION     DEBS_MOD1
+KEYWORDS    .
+SOURCE      .
+  ORGANISM  Streptomyces coelicolor
+            .
+FEATURES             Location/Qualifiers
+     CDS             1..4362
+                     /gene="debs1_mod1"
+                     /product="DEBS module 1 (KS-AT-KR-ACP)"
+                     /translation="MVAVVAMACRLPGGVSTPEEFWELLSEGRDAVAGLPTDRGWDLDS
+                     LFHPDPTRSGTAHQRGGGFLTEATAFDPAFFGMSPREALAVDPQQRLMLELSWEVLERA
+                     GIPPTSLQASPTGVFVGLIPQEYGPRLAEGGEGVEGYLMTGTTTSVASGRIAYTLGLEG
+                     PAISVDTACSSSLVAVHLACQSLRRGESSLAMAGGVTVMPTPGMLVDFSRMNSLAPDGR
+                     CKAFSAGANGFGMAEGAGMLLLERLSDARRNGHPVLAVLRGTAVNSDGASNGLSAPNGR
+                     AQVRVIQQALAESGLGPADIDAVEAHGTGTRLGDPIEARALFEAYGRDREQPLHLGSVK
+                     SNLGHTQAAAGVAGVIKMVLAMRAGTLPRTLHASERSKEIDWSSGAISLLDEPEPWPAG
+                     ARPRRAGVSSFGISGTNAHAIIEEAPQVVEGERVEAGDVVAPWVLSASSAEGLRAQAAR
+                     LAAHLREHPGQDPRDIAYSLATGRAALPHRAAFAPVDESAALRVLDGLATGNADGAAVG
+                     TSRAQQRAVFVFPGQGWQWAGMAVDLLDTSPVFAAALRECADALEPHLDFEVIPFLRAE
+                     AARREQDAALSTERVDVVQPVMFAVMVSLASMWRAHGVEPAAVIGHSQGEIAAACVAGA
+                     LSLDDAARVVALRSRVIATMPGNKGMASIAAPAGEVRARIGDRVEIAAVNGPRSVVVAG
+                     DSDELDRLVASCTTECIRAKRLAVDYASHSSHVETIRDALHAELGEDFHPLPGFVPFFS
+                     TVTGRWTQPDELDAGYWYRNLRRTVRFADAVRALAEQGYRTFLEVSAHPILTAAIEEIG
+                     DGSGADLSAIHSLRRGDGSLADFGEALSRAFAAGVAVDWESVHLGTGARRVPLPTYPFQ
+                     RERVWLEPKPVARRSTEVDEVSALRYRIEWRPTGAGEPARLDGTWLVAKYAGTADETST
+                     AAREALESAGARVRELVVDARCGRDELAERLRSVGEVAGVLSLLAVDEAEPEEAPLALA
+                     SLADTLSLVQAMVSAELGCPLWTVTESAVATGPFERVRNAAHGALWGVGRVIALENPAV
+                     WGGLVDVPAGSVAELARHLAAVVSGGAGEDQLALRADGVYGRRWVRAAAPATDDEWKPT
+                     GTVLVTGGTGGVGGQIARWLARRGAPHLLLVSRSGPDADGAGELVAELEALGARTTVAA
+                     CDVTDRESVRELLGGIGDDVPLSAVFHAAATLDDGTVDTLTGERIERASRAKVLGARNL
+                     HELTRELDLTAFVLFSSFASAFGAPGLGGYAPGNAYLDGLAQQRRSDGLPATAVAWGTW
+                     AGSGMAEGAVADRFRRHGVIEMPPETACRALQNALDRAEVCPIVIDVRWDRFLLAYTAQ
+                     RPTRLFDEIDDARRAAPQAPAEPRVGALASLPAPEREEALFELVRSHAAAVLGHASAER
+                     VPADQAFAELGVDSLSALELRNRLGAATGVRLPTTTVFDHPDVRTLAAHLA"
+                     /transl_table=11
+                     /codon_start=1
+ORIGIN
+        1 atggtcgccg tcgtcgccat ggcctgccgc ctgccgggcg gcgtctccac cccggaggag
+       61 ttctgggagc tgctgtccga gggccgcgac gccgtcgccg gcctgccgac cgaccgcggc
+      121 tgggacctgg actccctgtt ccacccggac ccgacccgct ccggcaccgc ccaccagcgc
+      181 ggcggcggct tcctgaccga ggccaccgcc ttcgacccgg ccttcttcgg catgtccccg
+      241 cgcgaggccc tggccgtcga cccgcagcag cgcctgatgc tggagctgtc ctgggaggtc
+      301 ctggagcgcg ccggcatccc gccgacctcc ctgcaggcct ccccgaccgg cgtcttcgtc
+      361 ggcctgatcc cgcaggagta cggcccgcgc ctggccgagg gcggcgaggg cgtcgagggc
+      421 tacctgatga ccggcaccac cacctccgtc gcctccggcc gcatcgccta caccctgggc
+      481 ctggagggcc cggccatctc cgtcgacacc gcctgctcct cctccctggt cgccgtccac
+      541 ctggcctgcc agtccctgcg ccgcggcgag tcctccctgg ccatggccgg cggcgtcacc
+      601 gtcatgccga ccccgggcat gctggtcgac ttctcccgca tgaactccct ggccccggac
+      661 ggccgctgca aggccttctc cgccggcgcc aacggcttcg gcatggccga gggcgccggc
+      721 atgctgctgc tggagcgcct gtccgacgcc cgccgcaacg gccacccggt cctggccgtc
+      781 ctgcgcggca ccgccgtcaa ctccgacggc gcctccaacg gcctgtccgc cccgaacggc
+      841 cgcgcccagg tccgcgtcat ccagcaggcc ctggccgagt ccggcctggg cccggccgac
+      901 atcgacgccg tcgaggccca cggcaccggc acccgcctgg gcgacccgat cgaggcccgc
+      961 gccctgttcg aggcctacgg ccgcgaccgc gagcagccgc tgcacctggg ctccgtcaag
+     1021 tccaacctgg gccacaccca ggccgccgcc ggcgtcgccg gcgtcatcaa gatggtcctg
+     1081 gccatgcgcg ccggcaccct gccgcgcacc ctgcacgcct ccgagcgctc caaggagatc
+     1141 gactggtcct ccggcgccat ctccctgctg gacgagccgg agccgtggcc ggccggcgcc
+     1201 cgcccgcgcc gcgccggcgt ctcctccttc ggcatctccg gcaccaacgc ccacgccatc
+     1261 atcgaggagg ccccgcaggt cgtcgagggc gagcgcgtcg aggccggcga cgtcgtcgcc
+     1321 ccgtgggtcc tgtccgcctc ctccgccgag ggcctgcgcg cccaggccgc ccgcctggcc
+     1381 gcccacctgc gcgagcaccc gggccaggac ccgcgcgaca tcgcctactc cctggccacc
+     1441 ggccgcgccg ccctgccgca ccgcgccgcc ttcgccccgg tcgacgagtc cgccgccctg
+     1501 cgcgtcctgg acggcctggc caccggcaac gccgacggcg ccgccgtcgg cacctcccgc
+     1561 gcccagcagc gcgccgtctt cgtcttcccg ggccagggct ggcagtgggc cggcatggcc
+     1621 gtcgacctgc tggacacctc cccggtcttc gccgccgccc tgcgcgagtg cgccgacgcc
+     1681 ctggagccgc acctggactt cgaggtcatc ccgttcctgc gcgccgaggc cgcccgccgc
+     1741 gagcaggacg ccgccctgtc caccgagcgc gtcgacgtcg tccagccggt catgttcgcc
+     1801 gtcatggtct ccctggcctc catgtggcgc gcccacggcg tcgagccggc cgccgtcatc
+     1861 ggccactccc agggcgagat cgccgccgcc tgcgtcgccg gcgccctgtc cctggacgac
+     1921 gccgcccgcg tcgtcgccct gcgctcccgc gtcatcgcca ccatgccggg caacaagggc
+     1981 atggcctcca tcgccgcccc ggccggcgag gtccgcgccc gcatcggcga ccgcgtcgag
+     2041 atcgccgccg tcaacggccc gcgctccgtc gtcgtcgccg gcgactccga cgagctggac
+     2101 cgcctggtcg cctcctgcac caccgagtgc atccgcgcca agcgcctggc cgtcgactac
+     2161 gcctcccact cctcccacgt cgagaccatc cgcgacgccc tgcacgccga gctgggcgag
+     2221 gacttccacc cgctgccggg cttcgtcccg ttcttctcca ccgtcaccgg ccgctggacc
+     2281 cagccggacg agctggacgc cggctactgg taccgcaacc tgcgccgcac cgtccgcttc
+     2341 gccgacgccg tccgcgccct ggccgagcag ggctaccgca ccttcctgga ggtctccgcc
+     2401 cacccgatcc tgaccgccgc catcgaggag atcggcgacg gctccggcgc cgacctgtcc
+     2461 gccatccact ccctgcgccg cggcgacggc tccctggccg acttcggcga ggccctgtcc
+     2521 cgcgccttcg ccgccggcgt cgccgtcgac tgggagtccg tccacctggg caccggcgcc
+     2581 cgccgcgtcc cgctgccgac ctacccgttc cagcgcgagc gcgtctggct ggagccgaag
+     2641 ccggtcgccc gccgctccac cgaggtcgac gaggtctccg ccctgcgcta ccgcatcgag
+     2701 tggcgcccga ccggcgccgg cgagccggcc cgcctggacg gcacctggct ggtcgccaag
+     2761 tacgccggca ccgccgacga gacctccacc gccgcccgcg aggccctgga gtccgccggc
+     2821 gcccgcgtcc gcgagctggt cgtcgacgcc cgctgcggcc gcgacgagct ggccgagcgc
+     2881 ctgcgctccg tcggcgaggt cgccggcgtc ctgtccctgc tggccgtcga cgaggccgag
+     2941 ccggaggagg ccccgctggc cctggcctcc ctggccgaca ccctgtccct ggtccaggcc
+     3001 atggtctccg ccgagctggg ctgcccgctg tggaccgtca ccgagtccgc cgtcgccacc
+     3061 ggcccgttcg agcgcgtccg caacgccgcc cacggcgccc tgtggggcgt cggccgcgtc
+     3121 atcgccctgg agaacccggc cgtctggggc ggcctggtcg acgtcccggc cggctccgtc
+     3181 gccgagctgg cccgccacct ggccgccgtc gtctccggcg gcgccggcga ggaccagctg
+     3241 gccctgcgcg ccgacggcgt ctacggccgc cgctgggtcc gcgccgccgc cccggccacc
+     3301 gacgacgagt ggaagccgac cggcaccgtc ctggtcaccg gcggcaccgg cggcgtcggc
+     3361 ggccagatcg cccgctggct ggcccgccgc ggcgccccgc acctgctgct ggtctcccgc
+     3421 tccggcccgg acgccgacgg cgccggcgag ctggtcgccg agctggaggc cctgggcgcc
+     3481 cgcaccaccg tcgccgcctg cgacgtcacc gaccgcgagt ccgtccgcga gctgctgggc
+     3541 ggcatcggcg acgacgtccc gctgtccgcc gtcttccacg ccgccgccac cctggacgac
+     3601 ggcaccgtcg acaccctgac cggcgagcgc atcgagcgcg cctcccgcgc caaggtcctg
+     3661 ggcgcccgca acctgcacga gctgacccgc gagctggacc tgaccgcctt cgtcctgttc
+     3721 tcctccttcg cctccgcctt cggcgccccg ggcctgggcg gctacgcccc gggcaacgcc
+     3781 tacctggacg gcctggccca gcagcgccgc tccgacggcc tgccggccac cgccgtcgcc
+     3841 tggggcacct gggccggctc cggcatggcc gagggcgccg tcgccgaccg cttccgccgc
+     3901 cacggcgtca tcgagatgcc gccggagacc gcctgccgcg ccctgcagaa cgccctggac
+     3961 cgcgccgagg tctgcccgat cgtcatcgac gtccgctggg accgcttcct gctggcctac
+     4021 accgcccagc gcccgacccg cctgttcgac gagatcgacg acgcccgccg cgccgccccg
+     4081 caggccccgg ccgagccgcg cgtcggcgcc ctggcctccc tgccggcccc ggagcgcgag
+     4141 gaggccctgt tcgagctggt ccgctcccac gccgccgccg tcctgggcca cgcctccgcc
+     4201 gagcgcgtcc cggccgacca ggccttcgcc gagctgggcg tcgactccct gtccgccctg
+     4261 gagctgcgca accgcctggg cgccgccacc ggcgtccgcc tgccgaccac caccgtcttc
+     4321 gaccacccgg acgtccgcac cctggccgcc cacctggcct aa
+//

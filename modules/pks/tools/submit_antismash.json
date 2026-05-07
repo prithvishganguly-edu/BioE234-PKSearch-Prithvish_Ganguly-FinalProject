@@ -1,0 +1,42 @@
+{
+  "id": "org.bioe234.function.pks.submit_antismash.v1",
+  "name": "Submit to antiSMASH",
+  "description": "Submits a DNA sequence to the public antiSMASH API to analyze polyketide synthase (PKS) domains.",
+  "type": "function",
+  "keywords": ["antismash", "submit", "PKS", "validation"],
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "seq",
+      "type": "string",
+      "description": "The synthetic DNA sequence to analyze. Can be a raw string or resource name."
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "string",
+      "description": "A message containing the antiSMASH job ID to be used for checking status."
+    }
+  ],
+
+  "examples": [
+    {
+      "input":  { "seq": "ATGCGT..." },
+      "output": { "result": "Job successfully submitted! The Job ID is: test-job-123..." }
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/submit_antismash.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+
+    "mcp_name": "submit_antismash",
+    "seq_params": ["seq"]
+  }
+}

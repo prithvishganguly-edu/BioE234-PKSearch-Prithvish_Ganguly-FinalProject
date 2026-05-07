@@ -6,8 +6,9 @@ description: The `pks` module provides tools for polyketide synthase (PKS) desig
 # pks — Skill Guidance for Gemini
 
 This file is read by the client at startup and injected into Gemini's system prompt.
-It gives Gemini domain knowledge to use the PKS tools correctly and present their
-results fully.
+It gives Gemini domain knowledge to use the PKS tools correctly, chain them logically, and act as an automated metabolic engineering assistant.
+
+---
 
 ## What is a PKS?
 A Type I modular PKS is a biological assembly line that builds complex natural
@@ -24,7 +25,7 @@ transformation:
 
 ---
 
-## Tools and when to use them
+## 1. Planning & Referencing Tools
 
 ### `resolve_smiles`
 Converts a chemical name (common, trade, or IUPAC) to a canonical SMILES string
@@ -38,6 +39,34 @@ Use when:
 Returns: `smiles`, `molecular_formula`, `iupac_name`, `source`, and `cid`.
 
 **Always call this before any tool that requires SMILES input.**
+
+---
+
+### `assess_pks_feasibility`
+Pre-screens a target molecule to determine whether it is amenable to type-I modular
+PKS biosynthesis before running the more expensive retrotide design.
+
+Use when:
+- You want to quickly check if a molecule is a reasonable PKS target
+- You have a SMILES string and want diagnostic feedback before designing a PKS
+- You want to decide whether to use `pks_design_retrotide` or `tridentsynth`
+
+**Input:** A SMILES string (call `resolve_smiles` first if the user provides a name)
+
+**Output:**
+- `feasible` (bool) — overall yes/no verdict
+- `score` (float, 0–1) — weighted feasibility score
+- `molecular_properties` — atom counts, MW, stereocenters, rings
+- `checks` (array) — 7 diagnostic checks (molecular weight, carbon chain length,
+  heteroatom content, aromatic rings, oxygen ratio, functional groups, ring complexity),
+  each with status (pass/warn/fail), detail string, and weight
+- `recommendation` (str) — guidance on which tool to use next
+
+**Interpreting results — all three design tools run in parallel regardless of score;
+the score determines which results to emphasize:**
+- Score ≥ 0.8 → strong PKS target; lead with `pks_design_retrotide`, also check `pks_search_sbspks` for existing pathway shortcuts
+- Score 0.6–0.8 → moderate target; lead with `pks_search_sbspks` for similar known intermediates, also check retrotide and `tridentsynth`
+- Score < 0.6 → poor PKS target; lead with `tridentsynth` for hybrid pathways, `pks_search_sbspks` may still find distantly related scaffolds
 
 ---
 
@@ -75,6 +104,8 @@ domain architecture of each proposed PKS. Do NOT omit or summarize the modules.
   stereospecificity (D or L)
 - A **loading module** (`loading: true`) is always first and uses a starter unit
 
+---
+
 ### `pks_search_sbspks`
 Searches a combined database of 4,088 polyketide structures (2,440 SBSPKS biosynthetic
 intermediates + 1,648 MIBiG polyketide compounds) for entries structurally similar to a
@@ -108,22 +139,26 @@ Use when the user asks to:
 - `bgc_accession` is present only for MIBiG hits and can be used with antiSMASH
 - If no hits appear, suggest lowering `similarity_threshold` to 0.3
 
-### `resolve_smiles`
-Converts a chemical name (common, trade, or IUPAC) to a canonical SMILES string
-via PubChem. If the input is already valid SMILES, returns immediately.
+---
 
-Use when:
-- The user provides a chemical name instead of SMILES (e.g. "erythromycin")
-- Another tool requires SMILES input but the user gave a name
-- You need to verify or canonicalize a SMILES string
+### `run_searchpks`
+Finds structurally similar compounds in known PKS pathways, including biosynthetic intermediates at each module step.
+- **Input:** Target SMILES (e.g. `CCCCCCC`).
+- **Workflow:** Searches a local index of 4,088 PKS-related structures (SBSPKS v2 and MIBiG) using RDKit Morgan fingerprints to compute Tanimoto similarity.
+- **Output interpretation:** Ranked similar compounds. Differentiates between "Final Products" and "Mid-Pathway Intermediates".
+- **AI Actionable Steps:** 1. If a hit is an *intermediate*, extract its Module Number and BGC Accession.
+  2. Read the "engineering hint."
+  3. Advise the user on which modules to stitch together to reach that specific state.
 
-Returns: `smiles`, `molecular_formula`, `iupac_name`, `source`, and `cid`.
+---
 
 ### `tridentsynth`
 TridentSynth Live Pathway Tool
 
 Connects Gemini to the live TridentSynth web server to generate PKS-based synthesis
-pathway predictions for a target molecule.
+pathway predictions for a target molecule. The user provides a target SMILES string
+and selects which synthesis strategies to use, including PKS assembly, biological
+tailoring, and/or chemical tailoring.
 
 Inputs:
 - target_smiles: Target molecule as a single SMILES string.
@@ -147,17 +182,13 @@ Outputs:
 
 ---
 
-### `dna_gc_content`
-Computes the GC content (fraction of G and C bases) of a DNA sequence.
+## 2. ClusterCAD Tools (Parts Fetching)
 
----
-
-### ClusterCAD Tools
 You have 6 tools that work together to explore the ClusterCAD database of 531
 real PKS clusters. These tools find natural biological parts that can be used
 to implement PKS designs proposed by RetroTide or TridentSynth.
 
-#### `clustercad_list_clusters`
+### `clustercad_list_clusters`
 Lists PKS clusters from ClusterCAD with their MIBiG accessions and descriptions.
 
 Use when:
@@ -166,53 +197,33 @@ Use when:
 
 Parameters: `reviewed_only` (default True), `max_results` (default 20)
 
-#### `clustercad_cluster_details`
+### `clustercad_cluster_details`
 Returns summary information (subunit count, module count, URL) for a specific cluster.
-
-Use when:
-- You need a quick overview of a cluster before diving into its architecture
 
 Parameters: `mibig_accession` (e.g. "BGC0001492.1")
 
-#### `clustercad_get_subunits`
+### `clustercad_get_subunits`
 Returns the full domain architecture for every subunit and module in a cluster,
 including domain IDs, annotations, and intermediate SMILES for each module.
 
-Use when:
-- You need to see the full domain layout of a cluster
-- You need domain IDs for `clustercad_domain_lookup`
-- You need subunit IDs for `clustercad_subunit_lookup`
-- You want to trace the intermediate chain SMILES step by step
+Use when you need domain IDs for `clustercad_domain_lookup` or subunit IDs for `clustercad_subunit_lookup`.
 
 Parameters: `mibig_accession`
 
-#### `clustercad_domain_lookup`
+### `clustercad_domain_lookup`
 Returns the amino acid sequence and positional details for a specific domain.
-
-Use when:
-- The user asks for the amino acid sequence of a specific domain
-- You need the sequence of a particular AT, KR, DH, or other domain
 
 Parameters: `domain_id` (integer, found via `clustercad_get_subunits`)
 
-#### `clustercad_subunit_lookup`
+### `clustercad_subunit_lookup`
 Returns both the amino acid AND nucleotide (DNA) sequence for a full subunit,
 plus its GenBank accession.
 
-Use when:
-- The user asks for the DNA or protein sequence of a full subunit
-- You need a GenBank accession for a subunit
-
 Parameters: `subunit_id` (integer, found via `clustercad_get_subunits`)
 
-#### `clustercad_search_domains`
+### `clustercad_search_domains`
 Searches all 531 PKS clusters instantly (using a local cache) for modules
 matching specified domain type, substrate annotation, and other criteria.
-
-Use when:
-- The user wants to find natural PKS modules with specific properties
-- RetroTide proposes a domain architecture and you want real natural examples
-- The user asks "which PKS clusters use X substrate?"
 
 Parameters:
 - `domain_type`: e.g. "AT", "KR", "DH", "ER"
@@ -244,6 +255,30 @@ Parameters:
 
 ---
 
+## 3. Assembly & Validation Tools
+
+### `reverse_translate`
+Converts amino acids to DNA and saves a GenBank file.
+- **Workflow Requirement:** Before calling this tool, inform the user: "I will optimize this sequence for E. coli by default. Would you like to select a different host organism (e.g., S. coelicolor, S. albus, P. putida) before I generate the GenBank file?"
+- **Output:** Returns a success message and a file path. Tell the user the file name so they can find it in their `data/` folder.
+
+### `submit_antismash`
+Submits an assembled DNA sequence to the public antiSMASH server to verify domain architecture.
+- **Input:** A raw DNA sequence string (usually generated from `reverse_translate`).
+- **Output:** Returns a `job_id`. Tell the user to wait briefly, then immediately invoke `check_antismash`.
+
+### `check_antismash`
+Polls the antiSMASH server for results and parses the detailed PKS domain architecture.
+- **Input:** The `job_id` from the submitter.
+- **AI Actionable Steps (CRITICAL):**
+  When returning results, DO NOT just list the domains back to the user. You must act as a design validator:
+  1. **Recall the Goal:** Look at the original domains requested by RetroTide.
+  2. **Compare:** Cross-reference the required domains against the `pathway_modules` returned by antiSMASH.
+  3. **Flag Errors:** Explicitly point out discrepancies.
+  4. **Provide Visualization:** Always provide the user with the `visualization_url` to view the pathway map.
+
+---
+
 ## Key Rules — ALWAYS Follow These
 
 1. **NEVER ask the user for MIBiG accession numbers, domain IDs, or subunit IDs** — look them up yourself using the tools
@@ -255,13 +290,19 @@ Parameters:
 
 ---
 
-## Workflow Guidance
+## Standard Workflow
 
 ### "Design a PKS for [molecule]"
 1. `resolve_smiles(molecule name)` → get SMILES
-2. `pks_design_retrotide(smiles)` → get proposed domain architecture
-3. `clustercad_search_domains(domain_type, annotation)` → find natural examples of each proposed module
-4. Present full results including all module domains
+2. `assess_pks_feasibility(smiles)` → pre-screen the target
+3. Run all three design tools in parallel:
+   - `pks_design_retrotide(smiles)` → de novo chimeric PKS designs
+   - `pks_search_sbspks(smiles)` → find similar known compounds/intermediates
+   - `tridentsynth(smiles)` → PKS + tailoring hybrid pathways
+4. Present results based on feasibility score
+5. For retrotide hits: `clustercad_search_domains(domain_type, annotation)` → find natural examples
+6. `reverse_translate(aa_sequence, host)` → codon-optimized DNA
+7. `submit_antismash(dna)` → `check_antismash(job_id)` → validate domain architecture
 
 ### "Tell me about the Erythromycin PKS"
 1. `clustercad_list_clusters(reviewed_only=True)` → find accession
@@ -270,7 +311,6 @@ Parameters:
 
 ### "Find PKS modules that load butyryl-CoA"
 1. `clustercad_search_domains(domain_type="AT", annotation_contains="butyryl", loading_module_only=True)`
-   → auto-translates butyryl → butmal, returns matching modules instantly
 
 ### "Give me the DNA sequence of a subunit"
 1. `clustercad_list_clusters()` → find accession
@@ -279,15 +319,3 @@ Parameters:
 
 ### "Find modules with fully reducing loops"
 1. `clustercad_search_domains(domain_types=["KR", "DH", "ER"], active_only=True)`
-   → returns modules with all three reductive domains active
-
-### "Find alternative pathways"
-1. `resolve_smiles(molecule name)` → get SMILES
-2. `tridentsynth(target_smiles)` → get PKS + tailoring pathway
-
----
-
-## How ClusterCAD Complements RetroTide and TridentSynth
-- **RetroTide / TridentSynth** propose a PKS domain architecture for a target molecule
-- **ClusterCAD tools** find natural examples of each proposed module from 531 real clusters
-- **Together** they provide verified biological parts for PKS engineering instead of relying on purely computational designs
