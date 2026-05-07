@@ -20,6 +20,8 @@ class SubmitAntiSmash:
 
         payload = {
             "email": "opshoryc@berkeley.edu",
+            "asf": "true",
+            "knownclusterblast": "true",
         }
 
         # antiSMASH v1.0 expects the FASTA upload under the field name "seq"
