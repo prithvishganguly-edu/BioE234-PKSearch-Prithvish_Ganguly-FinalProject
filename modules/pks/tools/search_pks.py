@@ -706,7 +706,10 @@ class SearchPKS:
                 "module_number":    entry["module_number"],
                 "pathway_name":     entry["pathway_name"],
                 "organism":         entry["organism"],
-                "bgc_accession":    entry["bgc_accession"],
+                "bgc_url":          (
+                    f"https://mibig.secondarymetabolites.org/go/{entry['bgc_accession']}"
+                    if entry.get("bgc_accession") else None
+                ),
                 "engineering_hint": _generate_engineering_hint(entry),
             }
 

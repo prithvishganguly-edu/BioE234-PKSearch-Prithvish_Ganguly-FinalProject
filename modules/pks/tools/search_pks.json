@@ -1,7 +1,7 @@
 {
   "id": "org.bioe234.function.pks.search_pks.v1",
   "name": "PKS Intermediate and Product Similarity Search",
-  "description": "Searches a combined index of 4088 polyketide structures — 2440 SBSPKS biosynthetic intermediates and final products, plus 1648 MIBiG polyketide compounds — and returns the most structurally similar entries to a query SMILES. Similarity is computed locally using RDKit Morgan fingerprints (Tanimoto coefficient). Unlike ClusterCAD, which searches final PKS products only, this tool also searches every biosynthetic intermediate generated along each PKS assembly line. If the query molecule matches a mid-pathway intermediate, the tool returns an engineering_hint explaining how to engineer that PKS to terminate early and release the target structure. MIBiG hits include a bgc_accession field that the antiSMASH validator can consume directly.",
+  "description": "Searches a combined index of 4088 polyketide structures — 2440 SBSPKS biosynthetic intermediates and final products, plus 1648 MIBiG polyketide compounds — and returns the most structurally similar entries to a query SMILES. Similarity is computed locally using RDKit Morgan fingerprints (Tanimoto coefficient). Unlike ClusterCAD, which searches final PKS products only, this tool also searches every biosynthetic intermediate generated along each PKS assembly line. If the query molecule matches a mid-pathway intermediate, the tool returns an engineering_hint explaining how to engineer that PKS to terminate early and release the target structure. MIBiG hits include a bgc_url field with a direct link to the MIBiG reference cluster page.",
   "type": "function",
   "keywords": [
     "PKS",
@@ -55,7 +55,7 @@
   "outputs": [
     {
       "type": "object",
-      "description": "Structured dictionary with four top-level keys: (1) \"query_smiles\" — the input SMILES string; (2) \"total_hits\" — total number of index entries that met the similarity threshold before truncating to max_results; (3) \"results\" — ranked list of matching entries, highest similarity first; (4) \"search_type_used\" — which mode was executed; (5) \"warnings\" — list of non-fatal issues. Each entry in \"results\" contains: compound_name (str), smiles (str), similarity_score (float 0–1), source (\"sbspks\" or \"mibig\"), is_intermediate (bool — true when the match is a mid-pathway PKS chain elongation state rather than a released final product), module_number (int or null — 1-based PKS step for intermediates, 0 for starter units, null for final products), pathway_name (str), organism (str), bgc_accession (str or null — MIBiG BGC accession present only for mibig-source hits), engineering_hint (str or null — auto-generated engineering suggestion present only for is_intermediate=true hits). \"pathway_steps\" (list of str) is additionally present for sbspks-source hits when search_type=\"pathway_search\"."
+      "description": "Structured dictionary with four top-level keys: (1) \"query_smiles\" — the input SMILES string; (2) \"total_hits\" — total number of index entries that met the similarity threshold before truncating to max_results; (3) \"results\" — ranked list of matching entries, highest similarity first; (4) \"search_type_used\" — which mode was executed; (5) \"warnings\" — list of non-fatal issues. Each entry in \"results\" contains: compound_name (str), smiles (str), similarity_score (float 0–1), source (\"sbspks\" or \"mibig\"), is_intermediate (bool — true when the match is a mid-pathway PKS chain elongation state rather than a released final product), module_number (int or null — 1-based PKS step for intermediates, 0 for starter units, null for final products), pathway_name (str), organism (str), bgc_url (str or null — direct URL to the MIBiG reference cluster page, e.g. https://mibig.secondarymetabolites.org/go/BGC0000055, present only for mibig-source hits), engineering_hint (str or null — auto-generated engineering suggestion present only for is_intermediate=true hits). \"pathway_steps\" (list of str) is additionally present for sbspks-source hits when search_type=\"pathway_search\"."
     }
   ],
 
@@ -80,7 +80,7 @@
             "module_number": null,
             "pathway_name": "Pikromycin",
             "organism": "Streptomyces venezuelae",
-            "bgc_accession": null,
+            "bgc_url": null,
             "engineering_hint": null
           },
           {
@@ -92,7 +92,7 @@
             "module_number": null,
             "pathway_name": "pikromycin",
             "organism": "Streptomyces venezuelae ATCC 15439",
-            "bgc_accession": "BGC0000094",
+            "bgc_url": "https://mibig.secondarymetabolites.org/go/BGC0000094",
             "engineering_hint": null
           },
           {
@@ -104,7 +104,7 @@
             "module_number": 7,
             "pathway_name": "Narbomycin",
             "organism": "Streptomyces venezuelae",
-            "bgc_accession": null,
+            "bgc_url": null,
             "engineering_hint": "Target matches the module 7 intermediate of the Narbomycin pathway. Consider engineering this PKS to release the chain early by relocating the thioesterase (TE) domain after module 7, or by deleting all modules downstream of module 7."
           }
         ],
@@ -133,7 +133,7 @@
             "module_number": 2,
             "pathway_name": "Erythromycin",
             "organism": "Saccharopolyspora erythraea",
-            "bgc_accession": null,
+            "bgc_url": null,
             "engineering_hint": "Target matches the module 2 intermediate of the Erythromycin pathway. Consider engineering this PKS to release the chain early by relocating the thioesterase (TE) domain after module 2, or by deleting all modules downstream of module 2."
           }
         ],
@@ -162,7 +162,7 @@
             "module_number": null,
             "pathway_name": "Pikromycin",
             "organism": "Streptomyces venezuelae",
-            "bgc_accession": null,
+            "bgc_url": null,
             "engineering_hint": null,
             "pathway_steps": [
               "PikAI (Loading Module)",
