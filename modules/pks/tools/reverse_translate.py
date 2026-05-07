@@ -102,12 +102,20 @@ class ReverseTranslate:
         file_path = os.path.join(self.data_dir, filename)
         SeqIO.write(record, file_path, "genbank")
         
-        return {
+        result = {
             "status": "success",
             "dna_sequence": optimized_dna,
+            "dna_length_bp": len(optimized_dna),
             "file_saved_at": file_path,
-            "message": f"Sequence optimized for {actual_host_used} and saved to {filename}."
+            "message": f"Sequence optimized for {actual_host_used} and saved to {filename}.",
         }
+        if len(optimized_dna) < 1000:
+            result["warning"] = (
+                f"Output is only {len(optimized_dna)} bp. antiSMASH requires a minimum of "
+                "1000 bp — this sequence will be rejected if submitted directly. "
+                "Consider adding flanking sequence or submitting as part of a larger construct."
+            )
+        return result
 
 _instance = ReverseTranslate()
 _instance.initiate()
