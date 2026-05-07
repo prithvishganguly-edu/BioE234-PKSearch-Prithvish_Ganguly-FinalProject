@@ -1,8 +1,0 @@
-{
-  "_comment": "Stub — SearchPKS.py is empty. The live implementation is in search_pks.py / search_pks.json.",
-  "name": "SearchPKS_stub",
-  "description": "Unused stub; see search_pks.py for the real SearchPKS tool.",
-  "execution_details": {
-    "mcp_name": "SearchPKS_stub"
-  }
-}
