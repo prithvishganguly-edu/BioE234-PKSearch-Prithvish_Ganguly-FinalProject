@@ -267,6 +267,30 @@
     "notes": "Raw intermediate SMILES — matches erythromycin module 2 intermediate. Should return is_intermediate=true with engineering_hint about TE domain relocation."
   },
   {
+    "prompt": "Find natural parts for this RetroTide design and get the amino acid sequences.",
+    "expected_tool": "match_design_to_parts",
+    "expected_args": { "design": "<RetroTide design object from prior call>", "source": "retrotide" },
+    "notes": "User asks for natural parts after a RetroTide run. Gemini should pass the design object from the prior retrotide result."
+  },
+  {
+    "prompt": "What real PKS modules in ClusterCAD match my TridentSynth design?",
+    "expected_tool": "match_design_to_parts",
+    "expected_args": { "design": "<TridentSynth result object from prior call>", "source": "tridentsynth" },
+    "notes": "User asks for matching natural modules from a TridentSynth design. Gemini should pass the TridentSynth result and set source to tridentsynth."
+  },
+  {
+    "prompt": "Get amino acid sequences for each module in my PKS design so I can build it in the lab.",
+    "expected_tool": "match_design_to_parts",
+    "expected_args": { "design": "<design object from prior call>", "source": "retrotide", "max_matches_per_module": 3 },
+    "notes": "User wants AA sequences for lab construction. Gemini should infer the source from the prior design tool used in conversation."
+  },
+  {
+    "prompt": "Match this RetroTide design to ClusterCAD and show me 5 options per module.",
+    "expected_tool": "match_design_to_parts",
+    "expected_args": { "design": "<RetroTide design object from prior call>", "source": "retrotide", "max_matches_per_module": 5 },
+    "notes": "User explicitly requests more matches per module. Tests that max_matches_per_module is passed correctly."
+  },
+  {
     "prompt": "Find PKS pathways similar to lovastatin.",
     "expected_tool": "pks_search_sbspks",
     "expected_args": { "query_smiles": "<resolved from resolve_smiles>", "search_type": "reaction_search", "similarity_threshold": 0.4 },
