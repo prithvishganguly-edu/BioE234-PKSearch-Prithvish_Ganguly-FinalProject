@@ -28,11 +28,11 @@ class SubmitAntiSmash:
         if filepath:
             # Upload a GenBank file directly — antiSMASH uses existing CDS annotations,
             # no gene prediction needed.
-            if not os.path.isfile(filepath):
-                raise ValueError(f"File not found: {filepath}")
             ext = os.path.splitext(filepath)[1].lower()
             if ext not in (".gb", ".gbk", ".genbank"):
                 raise ValueError(f"filepath must be a GenBank file (.gb/.gbk), got: {ext}")
+            if not os.path.isfile(filepath):
+                raise ValueError(f"File not found: {filepath}")
             with open(filepath, "rb") as f:
                 fname = os.path.basename(filepath)
                 files = {"seq": (fname, f.read())}
