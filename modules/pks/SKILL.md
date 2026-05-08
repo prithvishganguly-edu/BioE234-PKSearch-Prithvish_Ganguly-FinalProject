@@ -296,13 +296,17 @@ Converts amino acids to DNA and saves a GenBank file with a proper CDS annotatio
 - **Warning:** If `dna_length_bp` < 1000, a `warning` key is present — tell the user the sequence is too short for antiSMASH and they should design a longer construct before submitting.
 
 ### `submit_antismash`
-Submits a DNA sequence or GenBank file to the public antiSMASH server to verify domain architecture.
-- **Inputs:**
+Submits a DNA sequence, GenBank file, or NCBI accession to the public antiSMASH server to verify domain architecture. Provide exactly one input.
+- **Inputs (mutually exclusive — provide exactly one):**
   - `seq` (str) — raw DNA string, minimum 1000 bp. Prodigal is used for gene prediction.
-  - `filepath` (str) — path to a GenBank `.gb` file from `reverse_translate`. **Preferred** — uses CDS annotations directly, no Prodigal needed, more accurate results.
+  - `filepath` (str) — path to a GenBank `.gb` file from `reverse_translate`. Uses CDS annotations directly, no Prodigal needed.
+  - `ncbi` (str) — an NCBI nucleotide accession (e.g. `AM420293`, `NC_003888`). antiSMASH fetches the record server-side; existing CDS annotations are preserved. **Use this for sequenced clones deposited on NCBI.**
 - **Output:** Returns a `job_id`. Tell the user to wait briefly, then immediately invoke `check_antismash` with `wait=True`.
 - **Always-on analyses:** Active Site Finder (ASF) and KnownClusterBlast (MIBiG similarity) are enabled on every submission automatically.
-- **Preferred workflow:** Pass `filepath` pointing to the GenBank saved by `reverse_translate` rather than extracting the raw DNA string.
+- **Choosing the right input:**
+  - Designing in silico → use `filepath` (GenBank from `reverse_translate`)
+  - Verifying a sequenced clone on NCBI → use `ncbi`
+  - Submitting raw sequence only → use `seq`
 
 ### `check_antismash`
 Polls the antiSMASH server for results and parses the detailed PKS domain architecture.

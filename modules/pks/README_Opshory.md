@@ -108,12 +108,21 @@ The sequence is wrapped in FASTA format and uploaded to the antiSMASH v1.0 REST 
 
 ### Parameters
 
+Provide **exactly one** of the following — passing multiple raises a `ValueError`.
+
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `seq` | string | `""` | Raw DNA sequence string to analyze (minimum 1000 bp) |
-| `filepath` | string | `""` | Path to a GenBank `.gb` file to upload directly |
+| `seq` | string | `""` | Raw DNA sequence string (minimum 1000 bp). Prodigal used for gene prediction. |
+| `filepath` | string | `""` | Path to a GenBank `.gb` file (e.g. from `reverse_translate`). CDS annotations used directly — no Prodigal. |
+| `ncbi` | string | `""` | NCBI nucleotide accession (e.g. `AM420293`, `NC_003888`). antiSMASH fetches the record server-side, preserving existing CDS annotations. Use this for sequenced clones deposited on NCBI. |
 
-Provide either `seq` or `filepath` — not both. When `filepath` is given the GenBank CDS annotations are used as-is (no Prodigal), which gives more accurate domain calls and faster results.
+### Choosing the right input
+
+| Scenario | Use |
+|----------|-----|
+| In-silico design from `reverse_translate` | `filepath` |
+| Sequenced clone deposited on NCBI | `ncbi` |
+| Raw DNA string only | `seq` |
 
 ### Output
 
@@ -124,14 +133,17 @@ Provide either `seq` or `filepath` — not both. When `filepath` is given the Ge
 ### Example usage
 
 ```
+# Submit GenBank file (preferred for in-silico designs)
+Gemini calls: submit_antismash(filepath="modules/pks/data/synthetic_pks.gb")
+
+# Submit by NCBI accession (preferred for sequenced clones)
+Gemini calls: submit_antismash(ncbi="AM420293")
+
 # Submit raw DNA
 Gemini calls: submit_antismash(seq="ATGAAACGT...")
-
-# Submit GenBank file directly (preferred when reverse_translate output is available)
-Gemini calls: submit_antismash(filepath="modules/pks/data/synthetic_pks.gb")
 ```
 
-> **Note:** NCBI accession numbers and MIBiG BGC accessions are not supported as inputs.
+> **Note:** MIBiG BGC accessions (e.g. `BGC0000055`) are not supported — use the NCBI accession linked from the MIBiG entry instead.
 
 ---
 
@@ -277,3 +289,4 @@ pytest tests/test_tools.py -v -k "reverse_translate"
 | `reverse_translate` emitted `misc_feature`; antiSMASH ignores it | Changed to `CDS` feature with embedded translation |
 | `check_antismash` only parsed BGC regions → empty output for short constructs | Now always parses `nrps_pks` domain predictions and polymer SMILES directly |
 | Sequences under 1000 bp submitted silently and failed server-side | Added client-side length check with clear error message |
+| Only accepted raw DNA — no way to submit a sequenced clone from NCBI | Added `ncbi` accession parameter; antiSMASH fetches the record server-side |
