@@ -198,7 +198,6 @@ class TridentSynth:
         if use_chem:
             payload.append(("synthesisStrategy_chem", "on"))
 
-        # Exact live TridentSynth field names from browser Form Data.
         payload.append(("rangebio", str(max_bio_steps if max_bio_steps is not None else 1)))
         payload.append(("rangechem", str(max_chem_steps if max_chem_steps is not None else 1)))
 
@@ -211,7 +210,6 @@ class TridentSynth:
             for extender in extenders:
                 payload.append(("pksExtenders[]", extender))
 
-        # Live form includes these even when blank.
         payload.append(("maxAtomsC", "" if max_carbon is None else str(max_carbon)))
         payload.append(("maxAtomsN", "" if max_nitrogen is None else str(max_nitrogen)))
         payload.append(("maxAtomsO", "" if max_oxygen is None else str(max_oxygen)))
@@ -304,11 +302,6 @@ class TridentSynth:
 
         return None
 
-    def _candidate_result_urls(self, task_id: str) -> list[str]:
-        return [
-            urljoin(self.base_url, f"results/{task_id}/"),
-        ]
-
     def _fetch_result_page(
         self,
         session: requests.Session,
@@ -372,16 +365,6 @@ class TridentSynth:
         text = soup.get_text("\n", strip=True)
         return [line.strip() for line in text.splitlines() if line.strip()]
 
-    def _value_after_label(self, lines: list[str], label: str) -> Optional[str]:
-        label_clean = self._clean(label).rstrip(":")
-
-        for i, line in enumerate(lines):
-            if self._clean(line).rstrip(":") == label_clean:
-                if i + 1 < len(lines):
-                    return lines[i + 1].strip("` ")
-
-        return None
-
     def _looks_like_smiles(self, value: str) -> bool:
         if not value:
             return False
@@ -428,35 +411,6 @@ class TridentSynth:
 
         return text
 
-    def _extract_product_smiles(self, text: str, label: str) -> Optional[str]:
-        pattern = rf"{re.escape(label)}.*?`([^`]+)`"
-        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
-        if match:
-            value = match.group(1).strip()
-            return value if self._looks_like_smiles(value) else None
-
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        label_clean = self._clean(label)
-
-        for i, line in enumerate(lines):
-            if self._clean(line).rstrip(":") == label_clean.rstrip(":"):
-                if i + 1 < len(lines):
-                    value = lines[i + 1].strip("` ")
-                    return value if self._looks_like_smiles(value) else None
-
-        return None
-
-    def _extract_float_after_label(self, text: str, label: str) -> Optional[float]:
-        pattern = rf"{re.escape(label)}.*?([0-9]+(?:\.[0-9]+)?)"
-        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
-        if not match:
-            return None
-
-        try:
-            return float(match.group(1))
-        except ValueError:
-            return None
-
     def _extract_reaction_smiles(self, text: str) -> list[str]:
         cleaned: list[str] = []
 
@@ -499,7 +453,6 @@ class TridentSynth:
     def _extract_pks_modules(self, text: str) -> list[dict[str, Any]]:
         modules: list[dict[str, Any]] = []
 
-        # Only parse before downstream post-PKS pathway sections.
         pre_pathway_text = re.split(
             r"Post-PKS pathways|Pathway 1|Reaction rules|Reaction enthalpies",
             text,
@@ -517,8 +470,6 @@ class TridentSynth:
         for match in pattern.finditer(pre_pathway_text):
             module_number = int(match.group(1))
 
-            # If Module 1, 2, etc. appears again, the page has moved to another candidate design.
-            # Stop so we only return the first/best PKS module set.
             if module_number in seen_module_numbers:
                 break
 
@@ -611,26 +562,7 @@ class TridentSynth:
 
         return list(dict.fromkeys(enthalpies))
 
-    def _section_between(
-        self,
-        text: str,
-        start_pattern: str,
-        end_pattern: str,
-    ) -> str:
-        match = re.search(
-            start_pattern + r"(.*?)" + end_pattern,
-            text,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-        if match:
-            return match.group(1).strip()
-        return ""
-
     def _explicit_summary_value(self, lines: list[str], label: str) -> Optional[str]:
-        """
-        Parse only exact label/value pairs from the Synthesis parameters section.
-        This avoids Gemini or the parser guessing from nearby molecule text.
-        """
         label_clean = self._clean(label).rstrip(":")
 
         for i, line in enumerate(lines):
@@ -642,10 +574,6 @@ class TridentSynth:
         return None
 
     def _explicit_first_smiles_after_label(self, text: str, label: str) -> Optional[str]:
-        """
-        Parse a SMILES value only when it appears directly after a known result label,
-        such as 'PKS product' or 'Post-PKS product'.
-        """
         label_pattern = re.escape(label)
 
         patterns = [
@@ -664,9 +592,6 @@ class TridentSynth:
         return None
 
     def _explicit_similarity_after_label(self, text: str, label: str) -> Optional[float]:
-        """
-        Parse similarity values only from the specific labeled area.
-        """
         pattern = rf"{re.escape(label)}.*?similarity to target.*?([0-9]+(?:\.[0-9]+)?)"
         match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
 
@@ -691,16 +616,14 @@ class TridentSynth:
             return float(match.group(1))
         except ValueError:
             return None
-    
+
     def _parse_result_page(self, html: str, task_id: Optional[str]) -> dict[str, Any]:
         soup = BeautifulSoup(html, "html.parser")
         lines = self._text_lines(soup)
         full_text = soup.get_text("\n", strip=True)
 
-        # Explicitly isolate the first/best pathway block.
         best_block = self._extract_best_pathway_block(full_text)
 
-        # These fields come only from exact Synthesis parameter labels.
         target_smiles = self._explicit_summary_value(lines, "Target SMILES")
         target_name = self._explicit_summary_value(lines, "Target Name")
         pathway_sequence = self._explicit_summary_value(lines, "Pathway Sequence")
@@ -711,7 +634,6 @@ class TridentSynth:
         chem_steps = self._explicit_summary_value(lines, "# Chem Steps")
         job_id = self._explicit_summary_value(lines, "Job Id") or task_id
 
-        # These fields come only from the first/best pathway block.
         pks_product = self._explicit_first_smiles_after_label(best_block, "PKS product")
         post_pks_product = self._explicit_first_smiles_after_label(best_block, "Post-PKS product")
 
@@ -720,26 +642,20 @@ class TridentSynth:
 
         net_feasibility = self._explicit_net_feasibility(best_block)
 
-        # Reaction information comes only from the Reactions (SMILES) section
-        # inside the best pathway block.
         reaction_smiles = self._extract_reaction_smiles(best_block)
 
-        # Keep only the top/best reaction if the page includes alternatives.
         if len(reaction_smiles) > 1:
             reaction_smiles = reaction_smiles[:1]
 
         reaction_structures = [self._reaction_to_structures(rxn) for rxn in reaction_smiles]
 
-        # Reaction rule information comes only from the Reaction rules section.
         reaction_rule_ids = self._unique_ordered(re.findall(r"rule\d+_\d+", best_block))
         reaction_rule_names = self._extract_reaction_rule_names(best_block)
         reaction_enthalpies = self._extract_reaction_enthalpies(best_block)
 
-        # PKS modules come only from the first module set.
         pks_modules = self._extract_pks_modules(full_text)
         domain_legend = self._extract_domain_legend(full_text)
 
-        # Step feasibility values come only from the Step feasibilities section.
         step_feasibilities: list[float] = []
         step_section = re.search(
             r"Step feasibilities\s*(.*?)(Net feasibility|Full pathway design #\d+|Pathway \d+|$)",
@@ -754,11 +670,6 @@ class TridentSynth:
                 except ValueError:
                     pass
 
-        # Pathway structures are derived only from:
-        # 1. parsed PKS product
-        # 2. reactants/products in the selected reaction SMILES
-        # 3. parsed post-PKS product
-        # 4. parsed target SMILES
         structure_values: list[Optional[str]] = [pks_product]
 
         for rxn_struct in reaction_structures:
@@ -865,10 +776,18 @@ class TridentSynth:
 
         lines.append("")
         lines.append("Best pathway:")
-        lines.append(f"- PKS product SMILES: {best.get('pks_product_smiles')}")
-        lines.append(f"- PKS similarity to target: {best.get('pks_similarity_to_target')}")
-        lines.append(f"- Final product SMILES: {best.get('post_pks_product_smiles')}")
-        lines.append(f"- Final product similarity to target: {best.get('post_pks_similarity_to_target')}")
+
+        if best.get("pks_product_smiles") is not None:
+            lines.append(f"- PKS product SMILES: {best.get('pks_product_smiles')}")
+
+        if best.get("pks_similarity_to_target") is not None:
+            lines.append(f"- PKS similarity to target: {best.get('pks_similarity_to_target')}")
+
+        if best.get("post_pks_product_smiles") is not None:
+            lines.append(f"- Final product SMILES: {best.get('post_pks_product_smiles')}")
+
+        if best.get("post_pks_similarity_to_target") is not None:
+            lines.append(f"- Final product similarity to target: {best.get('post_pks_similarity_to_target')}")
 
         if reaction_smiles:
             lines.append(f"- Reaction SMILES: {reaction_smiles[0]}")
@@ -885,7 +804,7 @@ class TridentSynth:
             lines.append(f"- Pathway structures SMILES: {', '.join(pathway_structures)}")
 
         return "\n".join(lines)
-    
+
     def _add_selected_steps(self, parsed: dict[str, Any], submitted_query: dict[str, Any]) -> dict[str, Any]:
         params = parsed.get("synthesis_parameters", {})
         best_pathway = parsed.get("best_pathway", {})
@@ -959,7 +878,6 @@ class TridentSynth:
 
         parsed["synthesis_parameters"] = params
         parsed["best_pathway"] = best_pathway
-
         parsed["text_summary"] = self._build_text_summary(parsed, submitted_query)
 
         return parsed

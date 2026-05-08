@@ -267,6 +267,30 @@
     "notes": "Raw intermediate SMILES — matches erythromycin module 2 intermediate. Should return is_intermediate=true with engineering_hint about TE domain relocation."
   },
   {
+    "prompt": "Find natural parts for this RetroTide design and get the amino acid sequences.",
+    "expected_tool": "match_design_to_parts",
+    "expected_args": { "design": "<RetroTide design object from prior call>", "source": "retrotide" },
+    "notes": "User asks for natural parts after a RetroTide run. Gemini should pass the design object from the prior retrotide result."
+  },
+  {
+    "prompt": "What real PKS modules in ClusterCAD match my TridentSynth design?",
+    "expected_tool": "match_design_to_parts",
+    "expected_args": { "design": "<TridentSynth result object from prior call>", "source": "tridentsynth" },
+    "notes": "User asks for matching natural modules from a TridentSynth design. Gemini should pass the TridentSynth result and set source to tridentsynth."
+  },
+  {
+    "prompt": "Get amino acid sequences for each module in my PKS design so I can build it in the lab.",
+    "expected_tool": "match_design_to_parts",
+    "expected_args": { "design": "<design object from prior call>", "source": "retrotide", "max_matches_per_module": 3 },
+    "notes": "User wants AA sequences for lab construction. Gemini should infer the source from the prior design tool used in conversation."
+  },
+  {
+    "prompt": "Match this RetroTide design to ClusterCAD and show me 5 options per module.",
+    "expected_tool": "match_design_to_parts",
+    "expected_args": { "design": "<RetroTide design object from prior call>", "source": "retrotide", "max_matches_per_module": 5 },
+    "notes": "User explicitly requests more matches per module. Tests that max_matches_per_module is passed correctly."
+  },
+  {
     "prompt": "Find PKS pathways similar to lovastatin.",
     "expected_tool": "pks_search_sbspks",
     "expected_args": { "query_smiles": "<resolved from resolve_smiles>", "search_type": "reaction_search", "similarity_threshold": 0.4 },
@@ -283,5 +307,138 @@
     "expected_tool": "pks_search_sbspks",
     "expected_args": { "query_smiles": "<resolved from resolve_smiles>", "search_type": "reaction_search", "similarity_threshold": 0.4 },
     "notes": "Spinosad returns sim=0.91 (not 1.0) due to SMILES differences between PubChem and SBSPKS. Should show Spinosad as top hit with high similarity and include intermediate hits."
+  },
+  {
+    "prompt": "Use TridentSynth to find a PKS plus chemical synthesis pathway for hexane. The target SMILES is CCCCCC.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "wait_for_completion": true
+    },
+    "notes": "Basic live TridentSynth test for hexane using PKS plus one chemical step. Expected result should include decarboxylation to hexane."
+  },
+  {
+    "prompt": "Run TridentSynth on CCCCCCC using PKS and one chemical step. Return the PKS modules, reaction SMILES, pathway structures, reaction rule, and enthalpy.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "wait_for_completion": true
+    },
+    "notes": "Tests live PKS + chemical TridentSynth pathway parsing for heptane and checks that Gemini asks for the detailed text fields."
+  },
+  {
+    "prompt": "Use TridentSynth to synthesize heptane from SMILES CCCCCCC with PKS and chemistry only. Do not use biological tailoring.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "wait_for_completion": true
+    },
+    "notes": "Tests that 'chemistry only' maps to use_chem=true and use_bio=false while still using PKS."
+  },
+  {
+    "prompt": "Submit hexane to TridentSynth as CCCCCC using PKS and chemical synthesis, but only submit the job without waiting for the full result.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "wait_for_completion": false
+    },
+    "notes": "Tests quick submission mode where the tool should return a task ID without polling the results page."
+  },
+  {
+    "prompt": "Run TridentSynth for CCCCCCC using PKS, biological synthesis, and chemical synthesis with one bio step and one chemical step.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCCC",
+      "use_pks": true,
+      "use_bio": true,
+      "use_chem": true,
+      "max_bio_steps": 1,
+      "max_chem_steps": 1,
+      "wait_for_completion": true
+    },
+    "notes": "Tests all three TridentSynth synthesis strategies and explicit bio/chem step counts."
+  },
+  {
+    "prompt": "Use TridentSynth to find a PKS-only route to tiglic acid, SMILES CC=C(C)C(=O)O.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CC=C(C)C(=O)O",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": false,
+      "wait_for_completion": true
+    },
+    "notes": "Tests PKS-only pathway selection for a small acid target."
+  },
+  {
+    "prompt": "Run TridentSynth on pyruvic acid CC(C(O)=O)=O using biology only with one biological step.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CC(C(O)=O)=O",
+      "use_pks": false,
+      "use_bio": true,
+      "use_chem": false,
+      "max_bio_steps": 1,
+      "wait_for_completion": true
+    },
+    "notes": "Tests non-PKS TridentSynth mode with biological synthesis only."
+  },
+  {
+    "prompt": "Use TridentSynth for CCCCCC with PKS and chemistry, thiolysis release, malonyl-CoA and methylmalonyl-CoA starters, and malonyl-CoA and methylmalonyl-CoA extenders.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "pks_release_mechanism": "thiolysis",
+      "pks_starters": ["Malonyl-CoA", "Methylmalonyl-CoA"],
+      "pks_extenders": ["Malonyl-CoA", "Methylmalonyl-CoA"],
+      "wait_for_completion": true
+    },
+    "notes": "Tests explicit PKS option parsing for release mechanism, starters, and extenders."
+  },
+  {
+    "prompt": "Use TridentSynth to search for a pathway to CCCCCC with PKS plus one chemical step, but limit DORAnet to molecules with at most 8 carbons, 0 nitrogens, and 2 oxygens.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "max_carbon": 8,
+      "max_nitrogen": 0,
+      "max_oxygen": 2,
+      "wait_for_completion": true
+    },
+    "notes": "Tests optional atom-count filters max_carbon, max_nitrogen, and max_oxygen."
+  },
+  {
+    "prompt": "Can TridentSynth make this target: C.CC?",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "C.CC",
+      "use_pks": true,
+      "wait_for_completion": true
+    },
+    "notes": "Validation test: target contains '.', so the tool should reject it because TridentSynth accepts one molecule at a time."
   }
 ]
