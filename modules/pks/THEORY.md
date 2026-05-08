@@ -181,6 +181,88 @@ This step connects computational design to physical DNA construction, closing th
 
 ---
 
+## 11. ClusterCAD Database Tools (`clustercad_*`)
+
+### What is ClusterCAD?
+
+ClusterCAD is a curated database of 531 experimentally characterized Type I modular PKS clusters, each with full domain annotations, substrate specificities, subunit sequences, and predicted biosynthetic intermediates. It is maintained by the Joint BioEnergy Institute (JBEI) and provides a ground-truth reference for PKS domain architectures derived from real organisms.
+
+### Role in the Pipeline
+
+The ClusterCAD tools serve as a **parts database** for PKS engineering. Once RetroTide or TridentSynth proposes an abstract domain architecture for a target molecule, the ClusterCAD tools find real, experimentally validated biological parts that implement each proposed module. This closes the gap between computational design and physical DNA construction.
+
+RetroTide / TridentSynth → proposes abstract domain architecture
+↓
+clustercad_search_domains → finds natural modules matching each step
+↓
+clustercad_get_subunits → retrieves full domain architecture and IDs
+↓
+clustercad_domain_lookup / clustercad_subunit_lookup → retrieves AA and DNA sequences
+↓
+reverse_translate + submit_antismash → constructs and validates the chimeric PKS
+
+### The Six ClusterCAD Tools
+
+#### `clustercad_list_clusters`
+Returns a browsable list of PKS clusters from ClusterCAD with their MIBiG accession numbers and descriptions. Used as the entry point when the user references a cluster by name rather than accession number. Supports filtering by reviewed status and result count.
+
+#### `clustercad_cluster_details`
+Returns a summary of a specific PKS cluster given its MIBiG accession number, including subunit count, module count, and a link to the ClusterCAD web page. Used to get a quick overview before retrieving the full domain architecture.
+
+#### `clustercad_get_subunits`
+Returns the complete domain architecture for every subunit and module in a PKS cluster. For each module, it provides:
+- All domain types present (KS, AT, KR, DH, ER, ACP, TE)
+- Domain IDs for downstream sequence retrieval
+- Substrate annotations (e.g. "substrate mal, loading", "type B1, active")
+- Predicted intermediate SMILES — the growing chain state after each module
+
+This is the key tool for tracing how a natural PKS builds its product step by step, and for identifying which module produces an intermediate matching the engineering target.
+
+#### `clustercad_domain_lookup`
+Returns the amino acid sequence and positional coordinates of a single domain given its domain ID. Domain IDs are obtained from `clustercad_get_subunits`. This tool provides the sequence-level information needed to design domain-swapping constructs for chimeric PKS engineering.
+
+#### `clustercad_subunit_lookup`
+Returns both the amino acid sequence and the full nucleotide (DNA) sequence for an entire PKS subunit, along with its GenBank accession number. Subunit IDs are obtained from `clustercad_get_subunits`. This tool is the final step before gene synthesis — providing the exact DNA sequence to order or codon-optimize for a given expression host.
+
+#### `clustercad_search_domains`
+Searches all 531 PKS clusters simultaneously for modules matching specified domain criteria. Uses a locally cached JSON index (built once at first run, ~70 seconds) for instant subsequent queries. Supports filtering by:
+- Domain type (AT, KS, KR, DH, ER, ACP, TE)
+- Substrate annotation (with automatic synonym translation — e.g. "butyryl" → "butmal")
+- Domain combination (e.g. modules containing KR + DH + ER all active)
+- Active/inactive status
+- Loading module vs. extension module
+- Cluster name, module count, and reviewed status
+
+### Substrate Annotation Vocabulary
+
+ClusterCAD uses abbreviated substrate names in its domain annotations. The search tool automatically translates common chemical names to ClusterCAD terms:
+
+| Common Name | ClusterCAD Term |
+|------------|----------------|
+| Malonyl-CoA | mal |
+| Methylmalonyl-CoA | mmal |
+| Ethylmalonyl-CoA | emal |
+| Butyryl / Butylmalonyl-CoA | butmal |
+| Hexylmalonyl-CoA | hxmal |
+| Hydroxymalonyl-CoA | hmal |
+| Methoxymalonyl-CoA | mxmal |
+| Isobutyryl-CoA | isobut |
+| Propionyl-CoA | prop |
+| Acetyl-CoA | Acetyl-CoA |
+| Pyruvate | pyr |
+
+### Intermediate SMILES and Engineering Opportunities
+
+A key feature of the ClusterCAD tools is access to the predicted intermediate SMILES at each module — the chain state after that module has completed its condensation and reductive cycle. This enables the same truncation engineering strategy described in Section 2 and Section 5 for SBSPKS: if a target molecule matches a mid-pathway intermediate in a natural PKS cluster, the engineer can:
+
+1. Relocate the TE domain to after the matching module
+2. Delete all downstream modules
+3. Retrieve the subunit DNA sequence using `clustercad_subunit_lookup` for direct gene synthesis
+
+This approach is grounded in the same principle as SBSPKS intermediate search (Section 2) but uses the curated, experimentally validated ClusterCAD dataset rather than the computationally predicted SBSPKS intermediates.
+
+---
+
 ## References
 
 - Keatinge-Clay, A.T. (2012). The structures of type I polyketide synthases. *Natural Product Reports*, 29, 1050.
