@@ -316,10 +316,17 @@ Submits a DNA sequence, GenBank file, or NCBI accession to the public antiSMASH 
   - `ncbi` (str) — an NCBI nucleotide accession (e.g. `AM420293`, `NC_003888`). antiSMASH fetches the record server-side; existing CDS annotations are preserved. **Use this for sequenced clones deposited on NCBI.**
 - **Output:** Returns a `job_id`. Tell the user to wait briefly, then immediately invoke `check_antismash` with `wait=True`.
 - **Always-on analyses:** Active Site Finder (ASF) and KnownClusterBlast (MIBiG similarity) are enabled on every submission automatically.
-- **Choosing the right input:**
-  - Designing in silico → use `filepath` (GenBank from `reverse_translate`)
-  - Verifying a sequenced clone on NCBI → use `ncbi`
-  - Submitting raw sequence only → use `seq`
+- **Decision guide — which input to use:**
+
+  | Situation | What you have | Action |
+  |-----------|--------------|--------|
+  | Just ran RetroTide or TridentSynth | A design spec (module dict + SMILES) | → `match_design_to_parts` or ClusterCAD tools to get AA sequence → `reverse_translate` → `submit_antismash(filepath=...)` |
+  | Have an amino acid sequence (from ClusterCAD, UniProt, etc.) | AA string | → `reverse_translate` → `submit_antismash(filepath=...)` |
+  | Have a GenBank file on disk (from `reverse_translate`) | `.gb` file path | → `submit_antismash(filepath=path)` directly |
+  | Have a sequenced clone deposited on NCBI | NCBI accession (e.g. `AM420293`) | → `submit_antismash(ncbi=accession)` directly — no reverse_translate needed |
+  | Have raw DNA only (no file, no accession) | DNA string ≥ 1000 bp | → `submit_antismash(seq=dna)` |
+
+  **Never pass a SMILES, a module dict, or a BGC accession (BGC0000055) as the input — antiSMASH only accepts DNA.**
 
 ### `check_antismash`
 Polls the antiSMASH server for results and parses the detailed PKS domain architecture.
