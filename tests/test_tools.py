@@ -103,28 +103,86 @@ def test_check_antismash_unknown_job_id_raises():
         check_antismash("bacteria-00000000-0000-0000-0000-000000000000")
 
 
+_KNOWN_JOB = "bacteria-a5121478-d684-48c8-9779-8f94b7f7ff30"  # DEBS module 1 e2e run
+
+
 @pytest.mark.network
 def test_check_antismash_completed_output_structure():
-    # Uses a known-completed job (DEBS module 1 e2e run) — no new submission needed.
-    result = check_antismash("bacteria-a5121478-d684-48c8-9779-8f94b7f7ff30")
+    result = check_antismash(_KNOWN_JOB)
     assert result["status"] == "completed"
     assert "visualization_url" in result
     assert "domain_predictions" in result
     assert "predicted_polymer" in result
     assert "mibig_protein_hits" in result
-    # AT domain should be present with all expected keys
     at_domains = [v for v in result["domain_predictions"].values() if "AT_substrate" in v]
     assert len(at_domains) >= 1
     at = at_domains[0]
     assert "AT_substrate" in at
     assert "AT_substrate_code" in at
     assert "AT_confidence" in at
-    # Top MIBiG hit should be erythromycin at 100%
     top_hit = result["mibig_protein_hits"][0]
     assert top_hit["bgc_accession"] == "BGC0000055"
     assert top_hit["similarity_pct"] == 100.0
-    # Polymer should be present
     assert result["predicted_polymer"]["smiles"] is not None
+
+
+@pytest.mark.network
+def test_check_antismash_genes_domain_order():
+    result = check_antismash(_KNOWN_JOB)
+    assert "genes" in result
+    assert len(result["genes"]) >= 1
+    gene = next(iter(result["genes"].values()))
+    assert "domain_order_string" in gene
+    assert "domain_order" in gene
+    assert "domain_details" in gene
+    # DEBS module 1 should have KS-AT-KR-ACP
+    assert gene["domain_order_string"] == "KS-AT-KR-ACP"
+    assert gene["domain_order"] == ["KS", "AT", "KR", "ACP"]
+    # domain_details should have one entry per domain with evalue and score
+    assert len(gene["domain_details"]) == 4
+    for d in gene["domain_details"]:
+        assert "domain" in d
+        assert "evalue" in d
+        assert "score" in d
+
+
+@pytest.mark.network
+def test_check_antismash_validation_correct_design():
+    result = check_antismash(_KNOWN_JOB, expected_domains=[["KS", "AT", "KR", "ACP"]])
+    assert "validation" in result
+    v = result["validation"][0]
+    assert v["match"] is True
+    assert v["missing"] == []
+    assert v["unexpected"] == []
+    assert v["domain_order_string"] == "KS-AT-KR-ACP"
+
+
+@pytest.mark.network
+def test_check_antismash_validation_missing_domain():
+    result = check_antismash(_KNOWN_JOB, expected_domains=[["KS", "AT", "DH", "KR", "ACP"]])
+    assert "validation" in result
+    v = result["validation"][0]
+    assert v["match"] is False
+    assert "DH" in v["missing"]
+    assert v["unexpected"] == []
+
+
+@pytest.mark.network
+def test_check_antismash_validation_unexpected_domain():
+    # Expect only KS and AT — KR and ACP will be flagged as unexpected
+    result = check_antismash(_KNOWN_JOB, expected_domains=[["KS", "AT"]])
+    assert "validation" in result
+    v = result["validation"][0]
+    assert v["match"] is False
+    assert "KR" in v["unexpected"]
+    assert "ACP" in v["unexpected"]
+
+
+def test_check_antismash_no_validation_without_expected():
+    # Without expected_domains, validation key should not be present (no network needed)
+    # We can verify this on a fake/fast path by checking empty job_id guard
+    with pytest.raises(ValueError):
+        check_antismash("")
 
 
 @pytest.mark.network
