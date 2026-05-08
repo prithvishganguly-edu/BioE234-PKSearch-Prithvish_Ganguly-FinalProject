@@ -733,7 +733,19 @@ def _servers_reachable() -> bool:
         return False
 
 
-@pytest.mark.skipif(not _servers_reachable(), reason="SBSPKS server not reachable")
+def _cache_exists() -> bool:
+    """Return True only if the combined index cache has been built locally."""
+    cache = os.path.join(
+        os.path.dirname(__file__),
+        "..", "modules", "pks", "data", "combined_index.json",
+    )
+    return os.path.exists(cache) and os.path.getsize(cache) > 1000
+
+
+@pytest.mark.skipif(
+    not _cache_exists(),
+    reason="Combined index cache not built — run initiate() first to build it",
+)
 class TestLiveIntegration:
     def test_pikromycin_live_search_returns_correct_schema(self):
         """
