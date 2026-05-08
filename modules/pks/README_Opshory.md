@@ -102,6 +102,29 @@ Gemini calls: reverse_translate(aa_sequence="MKVL", host="s_coelicolor", filenam
 
 Submits a DNA sequence to the public **antiSMASH 7** server for biosynthetic gene cluster analysis. Returns a job ID for status polling.
 
+> **What antiSMASH cannot accept — common mistakes to avoid:**
+>
+> antiSMASH requires DNA. It **cannot** take:
+> - A SMILES string (output of `resolve_smiles`, `pks_design_retrotide`, or `tridentsynth`)
+> - A module architecture dict (output of `pks_design_retrotide` or `tridentsynth`)
+> - An amino acid sequence
+> - A MIBiG BGC accession (e.g. `BGC0000055`)
+>
+> **Required pipeline to reach antiSMASH from a RetroTide/TridentSynth design:**
+>
+> ```
+> pks_design_retrotide / tridentsynth
+>         ↓  (design spec — module types, substrates, SMILES)
+> match_design_to_parts / ClusterCAD tools
+>         ↓  (amino acid sequence)
+> reverse_translate
+>         ↓  (codon-optimized GenBank file)
+> submit_antismash(filepath=...)
+>         ↓  (job ID)
+> check_antismash(wait=True)
+>         ↓  (domain validation)
+> ```
+
 The sequence is wrapped in FASTA format and uploaded to the antiSMASH v1.0 REST API. Two analyses are always enabled:
 - **Active Site Finder (ASF)** — annotates catalytic residues within each PKS domain
 - **KnownClusterBlast** — compares your cluster against all MIBiG known clusters and reports percent similarity
