@@ -62,8 +62,7 @@ Use when:
   each with status (pass/warn/fail), detail string, and weight
 - `recommendation` (str) — guidance on which tool to use next
 
-**Interpreting results — all three design tools run in parallel regardless of score;
-the score determines which results to emphasize:**
+**Interpreting results:**
 - Score ≥ 0.8 → strong PKS target; lead with `pks_design_retrotide`, also check `pks_search_sbspks` for existing pathway shortcuts
 - Score 0.6–0.8 → moderate target; lead with `pks_search_sbspks` for similar known intermediates, also check retrotide and `tridentsynth`
 - Score < 0.6 → poor PKS target; lead with `tridentsynth` for hybrid pathways, `pks_search_sbspks` may still find distantly related scaffolds
@@ -129,14 +128,20 @@ Use when the user asks to:
 - `similarity_threshold` — minimum Tanimoto score; default 0.6, lower to 0.3–0.4 for distant scaffolds
 - `max_results` — max hits to return, default 5
 
-**Presenting results — IMPORTANT: always display every hit as a formatted table or structured list. Never summarize or omit hits. For each result show ALL of these fields:**
-- `compound_name` — name of the matching compound
-- `organism` — producing organism (italicised)
-- `similarity_score` — Tanimoto score (e.g. 1.0, 0.87)
-- `source` — sbspks or mibig
-- `is_intermediate` — true/false
-- `engineering_hint` — show in full if present, never omit
-- `bgc_url` — show as a clickable link if present (e.g. "MIBiG page: https://mibig.secondarymetabolites.org/go/BGC0000094")
+**Presenting results — IMPORTANT: always display every hit as a structured list. Never summarize or omit hits. For each result show fields in this exact order:**
+1. `compound_name` — name of the matching compound
+2. `organism` — producing organism (italicised)
+3. `similarity_score` — Tanimoto score (e.g. 1.0, 0.87)
+4. `source` — sbspks or mibig
+5. `is_intermediate` — true/false
+6. `bgc_url` — show as a clickable link if present (e.g. "MIBiG page: https://mibig.secondarymetabolites.org/go/BGC0000094")
+7. `engineering_hint` — show in full if present, never omit
+8. `engineering_recommendation` — always show this last; it is the most actionable field for the researcher
+
+**IMPORTANT — when to stop after pks_search_sbspks:**
+- If any result has `similarity_score=1.0` → the compound is already made naturally. Report the exact match and assembly line. Do NOT call retrotide or tridentsynth — they are unnecessary and will confuse the researcher.
+- If best score is 0.4–0.99 → report the hits, then optionally suggest the researcher run retrotide to compare module architectures.
+- If no hits above 0.4 → then call retrotide and/or tridentsynth to design a pathway from scratch.
 
 **Interpreting results:**
 - `similarity_score` 1.0 = exact match already in database
