@@ -196,6 +196,15 @@ def test_check_antismash_no_validation_without_expected():
 
 
 @pytest.mark.network
+def test_submit_antismash_ncbi_happy_path():
+    # AM420293 = Saccharopolyspora erythraea NRRL 2338 genome (contains erythromycin BGC)
+    msg = submit_antismash(ncbi="AM420293")
+    assert "Job ID is:" in msg
+    job_id = msg.split("Job ID is: ")[1].split(".")[0]
+    assert job_id.startswith("bacteria-")
+
+
+@pytest.mark.network
 def test_submit_antismash_filepath_happy_path():
     job_msg = submit_antismash(filepath="modules/pks/data/debs_mod1_e2e.gb")
     assert "Job ID is:" in job_msg
