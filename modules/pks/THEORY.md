@@ -100,7 +100,7 @@ This is based on the well-established PKS engineering principle that TE domain r
 
 ---
 
-## 7. Chemical Name Resolution (`resolve_smiles`)
+## 7. Chemical Name Resolution (`resolve_smiles`) - Johanna Kann
 
 Before any computational analysis can begin, the target molecule must be represented as a SMILES (Simplified Molecular Input Line Entry System) string — a compact, text-based notation that encodes molecular structure as a sequence of atoms, bonds, branches, and ring closures. For example, acetic acid is `CC(=O)O` and benzene is `c1ccccc1`.
 
@@ -114,7 +114,7 @@ This tool is the mandatory first step in the pipeline: all downstream tools (`as
 
 ---
 
-## 8. PKS Feasibility Pre-screening (`assess_pks_feasibility`)
+## 8. PKS Feasibility Pre-screening (`assess_pks_feasibility`) -- Johanna Kann
 
 Not every molecule is a viable target for type-I modular PKS biosynthesis. `assess_pks_feasibility` applies seven weighted heuristic checks derived from the known biosynthetic capabilities and constraints of type-I modular PKS systems:
 
@@ -132,7 +132,7 @@ Each check returns a status of **pass** (multiplier 1.0), **warn** (0.5), or **f
 
 ---
 
-## 9. Retrobiosynthetic PKS Design (`retrotide_designer`)
+## 9. Retrobiosynthetic PKS Design (`retrotide_designer`) -- Johanna Kann
 
 ### The RetroTide Algorithm
 
@@ -154,13 +154,13 @@ RetroTide performs **retrobiosynthesis**: given a target polyketide structure, i
 
 Designs are ranked by similarity score (1.0 = exact match) and the top candidates are returned. Each result includes the full module-by-module domain architecture, enabling direct implementation.
 
-### Chimeric PKS Engineering
+### Chimeric PKS Engineering -- Johanna Kann
 
 The designs RetroTide proposes are "chimeric" — they combine domains sourced from different natural PKS clusters. This is biologically grounded: domain swapping experiments have demonstrated that individual domains (particularly AT domains) can be exchanged between clusters while retaining function (Ruan et al., 1997; Reeves et al., 2001). RetroTide selects domains based on their characterized substrate specificity and reduction activity, drawing from a curated library of experimentally validated PKS domains.
 
 ---
 
-## 10. Mapping Designs to Natural Parts (`match_design_to_parts`)
+## 10. Mapping Designs to Natural Parts (`match_design_to_parts`) -- Johanna Kann
 
 A PKS design from RetroTide (or TridentSynth) specifies an abstract domain architecture — e.g., "module 2 needs an AT that loads methylmalonyl-CoA, an active B-type KR, and an active DH." To build this in the lab, each abstract domain must be matched to a real amino acid sequence from a characterized natural PKS.
 
