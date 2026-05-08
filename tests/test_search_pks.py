@@ -250,7 +250,8 @@ class TestKnownPolyketide:
         required = {
             "compound_name", "smiles", "similarity_score", "source",
             "is_intermediate", "module_number", "pathway_name",
-            "organism", "bgc_accession", "engineering_hint",
+            "organism", "bgc_url", "engineering_hint",
+            "engineering_recommendation", "pathway_steps",
         }
         for entry in result["results"]:
             assert required.issubset(entry.keys()), (
@@ -409,10 +410,10 @@ class TestMibigHits:
         mibig_hits = [r for r in result["results"] if r["source"] == "mibig"]
         assert len(mibig_hits) >= 1
 
-    def test_mibig_hit_has_bgc_accession(self, tool):
+    def test_mibig_hit_has_bgc_url(self, tool):
         """
-        Every mibig-source result must carry a non-None bgc_accession that
-        begins with 'BGC' — the ID format the antiSMASH validator consumes.
+        Every mibig-source result must carry a non-None bgc_url that
+        points to the MIBiG reference page.
         """
         result = tool.run(
             query_smiles=ERYTHROMYCIN_SMILES,
@@ -422,14 +423,14 @@ class TestMibigHits:
         mibig_hits = [r for r in result["results"] if r["source"] == "mibig"]
         assert len(mibig_hits) >= 1
         for hit in mibig_hits:
-            assert hit["bgc_accession"] is not None
-            assert hit["bgc_accession"].startswith("BGC"), (
-                f"Expected BGC-prefixed accession, got: {hit['bgc_accession']}"
+            assert hit["bgc_url"] is not None
+            assert "mibig.secondarymetabolites.org/go/BGC" in hit["bgc_url"], (
+                f"Expected MIBiG URL, got: {hit['bgc_url']}"
             )
 
-    def test_sbspks_hit_has_null_bgc_accession(self, tool):
+    def test_sbspks_hit_has_null_bgc_url(self, tool):
         """
-        Every sbspks-source result must have bgc_accession=None.
+        Every sbspks-source result must have bgc_url=None.
         """
         result = tool.run(
             query_smiles=PIKROMYCIN_SMILES,
@@ -439,7 +440,7 @@ class TestMibigHits:
         sbspks_hits = [r for r in result["results"] if r["source"] == "sbspks"]
         assert len(sbspks_hits) >= 1
         for hit in sbspks_hits:
-            assert hit["bgc_accession"] is None
+            assert hit["bgc_url"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -543,25 +544,26 @@ class TestSearchTypes:
             )
             assert isinstance(hit["pathway_steps"], list)
 
-    def test_pathway_search_no_steps_for_mibig_hits(self, tool):
+    def test_mibig_hits_have_empty_pathway_steps(self, tool):
         """
-        pathway_search must NOT attach pathway_steps to mibig-source hits
-        (MIBiG entries have no live SBSPKS pathway page).
+        MIBiG hits must have pathway_steps=[] — MIBiG has no SBSPKS pathway page.
         """
         result = tool.run(
             query_smiles=ERYTHROMYCIN_SMILES,
-            search_type="pathway_search",
+            search_type="reaction_search",
             max_results=5,
             similarity_threshold=0.9,
         )
         mibig_hits = [r for r in result["results"] if r["source"] == "mibig"]
         assert len(mibig_hits) >= 1
         for hit in mibig_hits:
-            assert "pathway_steps" not in hit
+            assert "pathway_steps" in hit
+            assert hit["pathway_steps"] == []
 
-    def test_reaction_search_never_adds_pathway_steps(self, tool):
+    def test_reaction_search_always_includes_pathway_steps_field(self, tool):
         """
-        reaction_search must never add pathway_steps regardless of source.
+        pathway_steps must always be present on every result regardless of
+        search_type — SBSPKS hits get steps fetched, MIBiG hits get empty list.
         """
         result = tool.run(
             query_smiles=ERYTHROMYCIN_SMILES,
@@ -570,12 +572,62 @@ class TestSearchTypes:
             similarity_threshold=0.0,
         )
         for hit in result["results"]:
-            assert "pathway_steps" not in hit
+            assert "pathway_steps" in hit
+            assert isinstance(hit["pathway_steps"], list)
 
 
 # ---------------------------------------------------------------------------
 # TestEngineeringHintFunction — unit test for _generate_engineering_hint
 # ---------------------------------------------------------------------------
+
+class TestEngineeringRecommendation:
+    def test_every_result_has_recommendation(self, tool):
+        """engineering_recommendation must be present and non-empty on every hit."""
+        result = tool.run(
+            query_smiles=ERYTHROMYCIN_SMILES,
+            max_results=5,
+            similarity_threshold=0.0,
+        )
+        for hit in result["results"]:
+            assert "engineering_recommendation" in hit
+            assert isinstance(hit["engineering_recommendation"], str)
+            assert len(hit["engineering_recommendation"]) > 20
+
+    def test_exact_match_recommendation_says_no_engineering(self, tool):
+        """Exact match (sim=1.0) recommendation must say no engineering needed."""
+        result = tool.run(
+            query_smiles=PIKROMYCIN_SMILES,
+            max_results=1,
+            similarity_threshold=0.9,
+        )
+        top = result["results"][0]
+        assert top["similarity_score"] == 1.0
+        assert "no engineering" in top["engineering_recommendation"].lower()
+
+    def test_intermediate_recommendation_mentions_te_domain(self, tool):
+        """Intermediate hit recommendation must mention TE domain relocation."""
+        result = tool.run(
+            query_smiles=ERYTHROMYCIN_MODULE2_SMILES,
+            max_results=5,
+            similarity_threshold=0.0,
+        )
+        intermediate_hits = [r for r in result["results"] if r["is_intermediate"] and r["module_number"] and r["module_number"] > 0]
+        assert len(intermediate_hits) >= 1
+        for hit in intermediate_hits:
+            assert "te" in hit["engineering_recommendation"].lower() or "thioesterase" in hit["engineering_recommendation"].lower()
+
+    def test_mibig_hits_have_empty_pathway_steps(self, tool):
+        """MIBiG hits must always have pathway_steps=[] since they have no SBSPKS page."""
+        result = tool.run(
+            query_smiles=ERYTHROMYCIN_SMILES,
+            max_results=5,
+            similarity_threshold=0.9,
+        )
+        mibig_hits = [r for r in result["results"] if r["source"] == "mibig"]
+        assert len(mibig_hits) >= 1
+        for hit in mibig_hits:
+            assert hit["pathway_steps"] == []
+
 
 class TestEngineeringHintFunction:
     @pytest.fixture(autouse=True)
@@ -709,15 +761,17 @@ class TestLiveIntegration:
         assert pik["source"] == "sbspks"
         assert pik["is_intermediate"] is False
         assert pik["module_number"] is None
-        assert pik["bgc_accession"] is None
+        assert pik["bgc_url"] is None
         assert pik["engineering_hint"] is None
         assert pik["organism"] == "Streptomyces venezuelae"
+        assert "pathway_steps" in pik
+        assert "engineering_recommendation" in pik
 
         mibig_hits = [r for r in result["results"] if r["source"] == "mibig"]
         assert len(mibig_hits) >= 1
         for hit in mibig_hits:
-            assert hit["bgc_accession"] is not None
-            assert hit["bgc_accession"].startswith("BGC")
+            assert hit["bgc_url"] is not None
+            assert "mibig.secondarymetabolites.org/go/BGC" in hit["bgc_url"]
 
     def test_live_search_returns_intermediate_hits(self):
         """

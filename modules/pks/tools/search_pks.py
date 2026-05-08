@@ -483,7 +483,7 @@ def _generate_engineering_recommendation(entry: dict, similarity_score: float) -
 
     retrotide_tip = (
         "Run pks_design_retrotide on your target to get its required module "
-        "layout and compare against this pathway to identify which modules need swapping."
+        "layout, then compare against this pathway to identify which modules need swapping."
     )
 
     # Format pathway steps if available
@@ -509,8 +509,8 @@ def _generate_engineering_recommendation(entry: dict, similarity_score: float) -
 
     return (
         f"Low similarity ({similarity_score:.2f}) to {pathway} from {organism}. "
-        f"Distantly related — may share extender unit logic or tailoring enzymes. "
-        f"{pathway_detail}"
+        f"Distantly related — may share extender unit logic or tailoring enzymes "
+        f"even if the core scaffold differs. {pathway_detail}"
     )
 
 
