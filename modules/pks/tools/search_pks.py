@@ -433,6 +433,87 @@ def _generate_engineering_hint(entry: dict) -> str | None:
     )
 
 
+def _generate_engineering_recommendation(entry: dict, similarity_score: float) -> str:
+    """
+    Generate a plain-English engineering recommendation for any result.
+    References pathway_search mode and pks_design_retrotide for specifics
+    rather than guessing module counts.
+    """
+    pathway  = entry.get("pathway_name", "this pathway")
+    organism = entry.get("organism", "unknown organism")
+    is_inter = entry.get("is_intermediate", False)
+    mod      = entry.get("module_number")
+    source   = entry.get("source", "")
+    steps    = entry.get("pathway_steps")
+    n_steps  = len(steps) if steps else None
+
+    # --- Intermediate hits ---
+    if is_inter:
+        if mod == 0:
+            return (
+                f"Your target resembles the starter unit of the {pathway} pathway "
+                f"in {organism}. Use this as the loading module in a chimeric PKS. "
+                f"Run pks_design_retrotide on your target to get the full module "
+                f"architecture needed after the loading step."
+            )
+        return (
+            f"Your target matches the module {mod} intermediate of the {pathway} "
+            f"pathway in {organism}. Relocate the thioesterase (TE) domain to after "
+            f"module {mod} and delete all downstream modules to release your target. "
+            f"Re-run this search with search_type='pathway_search' to see the full "
+            f"step-by-step assembly line for {pathway}."
+        )
+
+    # --- Final product hits ---
+    if similarity_score == 1.0:
+        if steps:
+            steps_str = " → ".join(steps)
+            rec = (
+                f"Exact match — {pathway} from {organism} already produces this compound. "
+                f"No engineering needed. Assembly line: {steps_str}."
+            )
+        else:
+            rec = (
+                f"Exact match — {pathway} from {organism} already produces this compound. "
+                f"No engineering needed."
+            )
+        if source == "mibig" and entry.get("bgc_url"):
+            rec += f" Full gene cluster reference: {entry['bgc_url']}"
+        return rec
+
+    retrotide_tip = (
+        "Run pks_design_retrotide on your target to get its required module "
+        "layout and compare against this pathway to identify which modules need swapping."
+    )
+
+    # Format pathway steps if available
+    if steps:
+        steps_str = " → ".join(steps)
+        pathway_detail = f"Assembly line for {pathway}: {steps_str}."
+    else:
+        pathway_detail = f"Pathway steps unavailable for {pathway} (SBSPKS server unreachable)."
+
+    if similarity_score >= 0.7:
+        return (
+            f"High similarity ({similarity_score:.2f}) to {pathway} from {organism}. "
+            f"Strong engineering scaffold — the core PKS architecture is likely "
+            f"compatible with your target. {pathway_detail} {retrotide_tip}"
+        )
+
+    if similarity_score >= 0.4:
+        return (
+            f"Moderate similarity ({similarity_score:.2f}) to {pathway} from {organism}. "
+            f"Related scaffold but with meaningful structural differences. "
+            f"{pathway_detail} {retrotide_tip}"
+        )
+
+    return (
+        f"Low similarity ({similarity_score:.2f}) to {pathway} from {organism}. "
+        f"Distantly related — may share extender unit logic or tailoring enzymes. "
+        f"{pathway_detail}"
+    )
+
+
 class SearchPKS:
     """
     Description:
@@ -697,6 +778,20 @@ class SearchPKS:
         for score, idx in top_hits:
             entry = self._combined_index[idx]
 
+            # Always fetch pathway steps for SBSPKS hits so the
+            # engineering_recommendation can reference the actual assembly line
+            pathway_steps: list[str] = []
+            if entry["source"] == "sbspks":
+                path_key = entry.get("path_key", "")
+                if path_key:
+                    pathway_data = self._fetch_pathway_data(
+                        path_key, run_warnings
+                    )
+                    pathway_steps = pathway_data.get("all_steps", [])
+
+            # Build enriched entry for recommendation generator
+            entry_with_steps = {**entry, "pathway_steps": pathway_steps}
+
             result: Dict[str, Any] = {
                 "compound_name":    entry["compound_name"],
                 "smiles":           entry["smiles"],
@@ -710,19 +805,12 @@ class SearchPKS:
                     f"https://mibig.secondarymetabolites.org/go/{entry['bgc_accession']}"
                     if entry.get("bgc_accession") else None
                 ),
+                "pathway_steps":    pathway_steps,
                 "engineering_hint": _generate_engineering_hint(entry),
+                "engineering_recommendation": _generate_engineering_recommendation(
+                    entry_with_steps, round(score, 4)
+                ),
             }
-
-            # pathway_search: live-fetch full step list for SBSPKS hits
-            if search_type == "pathway_search" and entry["source"] == "sbspks":
-                path_key = entry.get("path_key", "")
-                if path_key:
-                    pathway_data = self._fetch_pathway_data(
-                        path_key, run_warnings
-                    )
-                    result["pathway_steps"] = pathway_data.get("all_steps", [])
-                else:
-                    result["pathway_steps"] = []
 
             results.append(result)
 

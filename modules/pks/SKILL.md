@@ -137,6 +137,7 @@ Use when the user asks to:
 - `is_intermediate` — true/false
 - `engineering_hint` — show in full if present, never omit
 - `bgc_url` — show as a clickable link if present (e.g. "MIBiG page: https://mibig.secondarymetabolites.org/go/BGC0000094")
+- `engineering_recommendation` — always show this in full; it is the most actionable field for the researcher
 
 **Interpreting results:**
 - `similarity_score` 1.0 = exact match already in database
