@@ -163,12 +163,12 @@ Polls the antiSMASH server for job status and, when complete, parses the results
   "status": "completed",
   "visualization_url": "https://antismash.secondarymetabolites.org/upload/<job_id>/index.html",
   "domain_predictions": {
-    "nrpspksdomains_ctg1_1_PKS_AT.1": {
+    "nrpspksdomains_cds0_4356_PKS_AT.1": {
       "AT_substrate": "Methylmalonyl-CoA",
       "AT_substrate_code": "mmal",
       "AT_confidence": 100.0
     },
-    "nrpspksdomains_ctg1_1_PKS_KR.1": {
+    "nrpspksdomains_cds0_4356_PKS_KR.1": {
       "KR_stereochemistry": "B2",
       "KR_activity": "active"
     }
@@ -177,6 +177,16 @@ Polls the antiSMASH server for job status and, when complete, parses the results
     "polymer": "(Me-ohmal)",
     "smiles": "C(C)C(O)C(=O)O"
   },
+  "mibig_protein_hits": [
+    {
+      "gene": "cds0_4356",
+      "protein_accession": "CAM00062.1",
+      "protein_name": "EryAI_Erythromycin_polyketide_synthase_modules_1_and_2",
+      "bgc_accession": "BGC0000055",
+      "product_type": "Polyketide:Modular type I polyketide+Saccharide:Hybrid/tailoring saccharide",
+      "similarity_pct": 100.0
+    }
+  ],
   "pks_clusters": []
 }
 ```
@@ -194,9 +204,10 @@ Polls the antiSMASH server for job status and, when complete, parses the results
 | `domain_predictions[*].KR_activity` | `"active"` or `"inactive"` |
 | `predicted_polymer.polymer` | Shorthand name of the predicted chain extension product |
 | `predicted_polymer.smiles` | SMILES of that product |
-| `pks_clusters` | BGC region hits — only populated for constructs ≥10 kb |
+| `mibig_protein_hits` | Top MIBiG protein matches ranked by similarity — **always present**, even for short constructs. Each entry has `gene`, `protein_accession`, `protein_name`, `bgc_accession`, `product_type`, `similarity_pct`. |
+| `pks_clusters` | BGC region hits with cluster-level KnownClusterBlast rankings — only populated for constructs ≥10 kb |
 
-> **Note:** `domain_predictions` and `predicted_polymer` are always returned for any construct where PKS domains are detected, even short single-module fragments that don't trigger BGC region calling. `pks_clusters` will be empty for constructs under ~10 kb.
+> **Note:** `domain_predictions`, `predicted_polymer`, and `mibig_protein_hits` are always returned for any construct where PKS domains are detected, even short single-module fragments. `pks_clusters` will be empty for constructs under ~10 kb.
 
 ### Example usage
 
@@ -213,12 +224,13 @@ Gemini calls: check_antismash(job_id="bacteria-1abc9db1-...", wait=True, timeout
 When results come back, Gemini should:
 1. Recall the original module architecture from RetroTide or TridentSynth
 2. Compare `domain_predictions` against what was requested:
-   - Does `AT_substrate` match the extender unit RetroTide specified?
+   - Does `AT_substrate_code` match the RetroTide extender unit (e.g. `mmal`, `mxmal`)?
    - Does `KR_stereochemistry` match the KR type (A/B)?
    - Are any expected domains (DH, ER) absent?
 3. Interpret `predicted_polymer` — does the SMILES match the expected chain extension for that module?
-4. Flag any mismatches explicitly
-5. Provide the `visualization_url` so the user can inspect the annotated map
+4. Report `mibig_protein_hits` — name the top BGC match and similarity percentage; flag if unexpected or <70%
+5. Flag any mismatches explicitly
+6. Provide the `visualization_url` so the user can inspect the annotated map
 
 ---
 

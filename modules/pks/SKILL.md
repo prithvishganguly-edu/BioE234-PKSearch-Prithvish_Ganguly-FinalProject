@@ -316,7 +316,8 @@ Polls the antiSMASH server for results and parses the detailed PKS domain archit
     - `KR_stereochemistry` — stereo type (A1, A2, B1, B2, C1, C2)
     - `KR_activity` — `"active"` or `"inactive"`
   - `predicted_polymer` — `polymer` (e.g. `"(Me-ohmal)"`) and `smiles` of the predicted chain extension product
-  - `pks_clusters` — BGC region hits; only populated for constructs ≥10 kb
+  - `mibig_protein_hits` — top MIBiG protein matches ranked by similarity; **always present** even for short constructs. Each entry has `gene`, `protein_accession`, `protein_name`, `bgc_accession`, `product_type`, `similarity_pct`. Use this to confirm the construct matches the expected natural BGC.
+  - `pks_clusters` — BGC region hits with cluster-level KnownClusterBlast rankings; only populated for constructs ≥10 kb
 
 - **AI Actionable Steps (CRITICAL):**
   When returning results, DO NOT just list the domains back to the user. Act as a design validator:
@@ -326,8 +327,9 @@ Polls the antiSMASH server for results and parses the detailed PKS domain archit
      - Check `KR_stereochemistry` matches the KR type (A/B)
      - Flag any expected domain (DH, ER) that is absent
   3. **Interpret `predicted_polymer`:** Confirm the SMILES matches the expected chain extension product for that module.
-  4. **Flag Errors:** Explicitly call out mismatches (e.g. "RetroTide requested mxmal but antiSMASH detected mmal — possible AT domain mismatch").
-  5. **Provide Visualization:** Always give the user the `visualization_url`.
+  4. **Check `mibig_protein_hits`:** Report the top hit — e.g. "Your construct matches EryAI from BGC0000055 (erythromycin) at 100% similarity." Flag if the top hit is unexpected or similarity is low (<70%).
+  5. **Flag Errors:** Explicitly call out mismatches (e.g. "RetroTide requested mxmal but antiSMASH detected mmal — possible AT domain mismatch").
+  6. **Provide Visualization:** Always give the user the `visualization_url`.
 
 ---
 
