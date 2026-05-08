@@ -103,6 +103,49 @@ def test_check_antismash_unknown_job_id_raises():
         check_antismash("bacteria-00000000-0000-0000-0000-000000000000")
 
 
+@pytest.mark.network
+def test_check_antismash_completed_output_structure():
+    # Uses a known-completed job (DEBS module 1 e2e run) — no new submission needed.
+    result = check_antismash("bacteria-a5121478-d684-48c8-9779-8f94b7f7ff30")
+    assert result["status"] == "completed"
+    assert "visualization_url" in result
+    assert "domain_predictions" in result
+    assert "predicted_polymer" in result
+    assert "mibig_protein_hits" in result
+    # AT domain should be present with all expected keys
+    at_domains = [v for v in result["domain_predictions"].values() if "AT_substrate" in v]
+    assert len(at_domains) >= 1
+    at = at_domains[0]
+    assert "AT_substrate" in at
+    assert "AT_substrate_code" in at
+    assert "AT_confidence" in at
+    # Top MIBiG hit should be erythromycin at 100%
+    top_hit = result["mibig_protein_hits"][0]
+    assert top_hit["bgc_accession"] == "BGC0000055"
+    assert top_hit["similarity_pct"] == 100.0
+    # Polymer should be present
+    assert result["predicted_polymer"]["smiles"] is not None
+
+
+@pytest.mark.network
+def test_submit_antismash_filepath_happy_path():
+    job_msg = submit_antismash(filepath="modules/pks/data/debs_mod1_e2e.gb")
+    assert "Job ID is:" in job_msg
+    job_id = job_msg.split("Job ID is: ")[1].split(".")[0]
+    assert job_id.startswith("bacteria-")
+
+
+@pytest.mark.network
+def test_check_antismash_wait_true():
+    # Submit a fresh job and wait for it to complete automatically.
+    job_msg = submit_antismash(filepath="modules/pks/data/debs_mod1_e2e.gb")
+    job_id = job_msg.split("Job ID is: ")[1].split(".")[0]
+    result = check_antismash(job_id, wait=True, timeout_seconds=360)
+    assert result["status"] == "completed"
+    assert "domain_predictions" in result
+    assert len(result["domain_predictions"]) > 0
+
+
 """
 from modules.seq_basics.tools.translate import translate
 from modules.seq_basics.tools.reverse_complement import reverse_complement
