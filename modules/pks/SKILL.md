@@ -310,31 +310,31 @@ Polls the antiSMASH server for results and parses the detailed PKS domain archit
   - `job_id` (str) — the job ID from `submit_antismash`
   - `wait` (bool, default `False`) — if `True`, polls every 15 s until done (up to `timeout_seconds`)
   - `timeout_seconds` (int, default `300`) — max wait time when `wait=True`
+  - `expected_domains` (list of lists, optional) — expected domain order per gene, e.g. `[["KS","AT","KR","ACP"]]`. When provided, the tool returns a `validation` section with missing/unexpected domains and a match boolean.
 - **Always use `wait=True`** immediately after `submit_antismash` so the pipeline completes in one step without asking the user to call it again.
 - **Output fields:**
   - `status` — `"completed"` when done
   - `visualization_url` — direct link to the antiSMASH results page; always show this to the user
-  - `domain_predictions` — dict keyed by domain ID; each entry contains:
-    - `AT_substrate` — human-readable extender unit name (e.g. `"Methylmalonyl-CoA"`)
-    - `AT_substrate_code` — raw antiSMASH code (e.g. `"mmal"`) for comparison with RetroTide output
-    - `AT_confidence` — confidence score 0–100
-    - `KR_stereochemistry` — stereo type (A1, A2, B1, B2, C1, C2)
-    - `KR_activity` — `"active"` or `"inactive"`
+  - `genes` — dict keyed by locus_tag (one entry per CDS in the construct); each entry has:
+    - `domain_order_string` — e.g. `"KS-AT-KR-ACP"` — the full ordered domain string
+    - `domain_order` — list of short domain names in positional order
+    - `domain_details` — list of per-domain dicts with `domain`, `evalue`, `score`, `subtype`, and any AT/KR predictions inline
+  - `domain_predictions` — flat dict keyed by antiSMASH domain ID (backward-compatible); contains AT/KR predictions only
   - `predicted_polymer` — `polymer` (e.g. `"(Me-ohmal)"`) and `smiles` of the predicted chain extension product
-  - `mibig_protein_hits` — top MIBiG protein matches ranked by similarity; **always present** even for short constructs. Each entry has `gene`, `protein_accession`, `protein_name`, `bgc_accession`, `product_type`, `similarity_pct`. Use this to confirm the construct matches the expected natural BGC.
-  - `pks_clusters` — BGC region hits with cluster-level KnownClusterBlast rankings; only populated for constructs ≥10 kb
+  - `mibig_protein_hits` — top MIBiG protein matches ranked by similarity; **always present**. Each entry has `gene`, `protein_accession`, `protein_name`, `bgc_accession`, `product_type`, `similarity_pct`.
+  - `validation` — only present when `expected_domains` is passed; list of per-gene dicts with `expected`, `detected`, `domain_order_string`, `missing`, `unexpected`, `match`
+  - `pks_clusters` — BGC region hits; only populated for constructs ≥10 kb
 
 - **AI Actionable Steps (CRITICAL):**
   When returning results, DO NOT just list the domains back to the user. Act as a design validator:
   1. **Recall the Goal:** Look at the original module architecture from RetroTide or TridentSynth.
-  2. **Compare `domain_predictions`:** Cross-reference each detected domain against what was requested.
-     - Use `AT_substrate_code` to compare directly against RetroTide's substrate codes (e.g. `mmal`, `mxmal`)
-     - Check `KR_stereochemistry` matches the KR type (A/B)
-     - Flag any expected domain (DH, ER) that is absent
-  3. **Interpret `predicted_polymer`:** Confirm the SMILES matches the expected chain extension product for that module.
-  4. **Check `mibig_protein_hits`:** Report the top hit — e.g. "Your construct matches EryAI from BGC0000055 (erythromycin) at 100% similarity." Flag if the top hit is unexpected or similarity is low (<70%).
-  5. **Flag Errors:** Explicitly call out mismatches (e.g. "RetroTide requested mxmal but antiSMASH detected mmal — possible AT domain mismatch").
-  6. **Provide Visualization:** Always give the user the `visualization_url`.
+  2. **Report `genes[*].domain_order_string`** — show the detected domain string (e.g. `KS-AT-KR-ACP`) for each gene. This is the clearest summary of what antiSMASH found.
+  3. **If `validation` is present:** Report `match` (True/False), list any `missing` domains (e.g. "DH expected but not detected — possible frame-shift or truncation") and any `unexpected` domains.
+  4. **Check AT/KR predictions** in `domain_details`: use `AT_substrate_code` to compare against RetroTide's substrate codes; flag `KR_stereochemistry` mismatches.
+  5. **Interpret `predicted_polymer`:** Confirm the SMILES matches the expected chain extension product.
+  6. **Check `mibig_protein_hits`:** Report the top hit and similarity — e.g. "Matches EryAI (BGC0000055) at 100%." Flag if unexpected or <70%.
+  7. **Flag Errors:** Explicitly call out mismatches.
+  8. **Provide Visualization:** Always give the user the `visualization_url`.
 
 ---
 

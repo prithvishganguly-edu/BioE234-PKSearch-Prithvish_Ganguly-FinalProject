@@ -146,6 +146,7 @@ Polls the antiSMASH server for job status and, when complete, parses the results
 | `job_id` | string | required | The job ID returned by `submit_antismash` |
 | `wait` | bool | `False` | If `True`, polls every 15 s until the job completes or times out |
 | `timeout_seconds` | int | `300` | Max seconds to wait when `wait=True` |
+| `expected_domains` | list of lists | `None` | Expected domain order per gene, e.g. `[["KS","AT","KR","ACP"]]`. Triggers a `validation` section in the output. |
 
 ### Output (job still running)
 
@@ -162,25 +163,32 @@ Polls the antiSMASH server for job status and, when complete, parses the results
 {
   "status": "completed",
   "visualization_url": "https://antismash.secondarymetabolites.org/upload/<job_id>/index.html",
-  "domain_predictions": {
-    "nrpspksdomains_cds0_4356_PKS_AT.1": {
-      "AT_substrate": "Methylmalonyl-CoA",
-      "AT_substrate_code": "mmal",
-      "AT_confidence": 100.0
-    },
-    "nrpspksdomains_cds0_4356_PKS_KR.1": {
-      "KR_stereochemistry": "B2",
-      "KR_activity": "active"
+  "genes": {
+    "cds0_4356": {
+      "domain_order_string": "KS-AT-KR-ACP",
+      "domain_order": ["KS", "AT", "KR", "ACP"],
+      "domain_details": [
+        {"domain": "KS", "evalue": "1.90E-173", "score": "569.1", "subtype": "Modular-KS"},
+        {"domain": "AT", "evalue": "8.40E-105", "score": "342.2",
+         "AT_substrate": "Methylmalonyl-CoA", "AT_substrate_code": "mmal", "AT_confidence": 100.0},
+        {"domain": "KR", "evalue": "6.90E-59",  "score": "190.7",
+         "KR_stereochemistry": "B2", "KR_activity": "active"},
+        {"domain": "ACP", "evalue": "6.00E-30",  "score": "95.3"}
+      ]
     }
   },
-  "predicted_polymer": {
-    "polymer": "(Me-ohmal)",
-    "smiles": "C(C)C(O)C(=O)O"
+  "domain_predictions": {
+    "nrpspksdomains_cds0_4356_PKS_AT.1": {
+      "AT_substrate": "Methylmalonyl-CoA", "AT_substrate_code": "mmal", "AT_confidence": 100.0
+    },
+    "nrpspksdomains_cds0_4356_PKS_KR.1": {
+      "KR_stereochemistry": "B2", "KR_activity": "active"
+    }
   },
+  "predicted_polymer": {"polymer": "(Me-ohmal)", "smiles": "C(C)C(O)C(=O)O"},
   "mibig_protein_hits": [
     {
-      "gene": "cds0_4356",
-      "protein_accession": "CAM00062.1",
+      "gene": "cds0_4356", "protein_accession": "CAM00062.1",
       "protein_name": "EryAI_Erythromycin_polyketide_synthase_modules_1_and_2",
       "bgc_accession": "BGC0000055",
       "product_type": "Polyketide:Modular type I polyketide+Saccharide:Hybrid/tailoring saccharide",
@@ -191,23 +199,38 @@ Polls the antiSMASH server for job status and, when complete, parses the results
 }
 ```
 
+When `expected_domains=[["KS","AT","DH","KR","ACP"]]` is passed, a `validation` section is added:
+
+```json
+"validation": [
+  {
+    "expected": ["KS", "AT", "DH", "KR", "ACP"],
+    "detected": ["KS", "AT", "KR", "ACP"],
+    "domain_order_string": "KS-AT-KR-ACP",
+    "missing": ["DH"],
+    "unexpected": [],
+    "match": false
+  }
+]
+```
+
 ### Output fields explained
 
 | Field | Description |
 |-------|-------------|
 | `visualization_url` | Direct link to the antiSMASH results page |
-| `domain_predictions` | Per-domain annotations keyed by antiSMASH domain ID |
-| `domain_predictions[*].AT_substrate` | Human-readable extender unit name (e.g. `"Methylmalonyl-CoA"`) |
-| `domain_predictions[*].AT_substrate_code` | Raw antiSMASH code (e.g. `"mmal"`) for programmatic use |
-| `domain_predictions[*].AT_confidence` | Confidence score 0–100 |
-| `domain_predictions[*].KR_stereochemistry` | KR stereo type: A1, A2, B1, B2, C1, or C2 |
-| `domain_predictions[*].KR_activity` | `"active"` or `"inactive"` |
+| `genes` | Dict keyed by locus_tag — one entry per CDS in the construct |
+| `genes[*].domain_order_string` | Full ordered domain string, e.g. `"KS-AT-KR-ACP"` |
+| `genes[*].domain_order` | List of short domain names in positional order |
+| `genes[*].domain_details` | Per-domain list with `domain`, `evalue`, `score`, `subtype`, and inline AT/KR predictions |
+| `domain_predictions` | Flat backward-compatible dict keyed by antiSMASH domain ID (AT/KR only) |
 | `predicted_polymer.polymer` | Shorthand name of the predicted chain extension product |
 | `predicted_polymer.smiles` | SMILES of that product |
-| `mibig_protein_hits` | Top MIBiG protein matches ranked by similarity — **always present**, even for short constructs. Each entry has `gene`, `protein_accession`, `protein_name`, `bgc_accession`, `product_type`, `similarity_pct`. |
-| `pks_clusters` | BGC region hits with cluster-level KnownClusterBlast rankings — only populated for constructs ≥10 kb |
+| `mibig_protein_hits` | Top MIBiG protein matches ranked by similarity — **always present** |
+| `validation` | Only present when `expected_domains` is passed; per-gene diff of expected vs detected |
+| `pks_clusters` | BGC region hits — only populated for constructs ≥10 kb |
 
-> **Note:** `domain_predictions`, `predicted_polymer`, and `mibig_protein_hits` are always returned for any construct where PKS domains are detected, even short single-module fragments. `pks_clusters` will be empty for constructs under ~10 kb.
+> **Note:** `genes`, `domain_predictions`, `predicted_polymer`, and `mibig_protein_hits` are always returned for any construct where PKS domains are detected. `pks_clusters` and `validation` are conditional.
 
 ### Example usage
 
@@ -222,15 +245,15 @@ Gemini calls: check_antismash(job_id="bacteria-1abc9db1-...", wait=True, timeout
 ### Validation workflow (AI behavior)
 
 When results come back, Gemini should:
-1. Recall the original module architecture from RetroTide or TridentSynth
-2. Compare `domain_predictions` against what was requested:
-   - Does `AT_substrate_code` match the RetroTide extender unit (e.g. `mmal`, `mxmal`)?
-   - Does `KR_stereochemistry` match the KR type (A/B)?
-   - Are any expected domains (DH, ER) absent?
-3. Interpret `predicted_polymer` — does the SMILES match the expected chain extension for that module?
-4. Report `mibig_protein_hits` — name the top BGC match and similarity percentage; flag if unexpected or <70%
-5. Flag any mismatches explicitly
-6. Provide the `visualization_url` so the user can inspect the annotated map
+1. Report `genes[*].domain_order_string` — the clearest single summary (e.g. `KS-AT-KR-ACP`)
+2. If `validation` is present: report `match`, list `missing` domains with an explanation (e.g. "DH expected but not detected — possible frame-shift or truncation"), and list `unexpected` domains
+3. Check AT/KR predictions from `domain_details`: `AT_substrate_code` vs RetroTide, `KR_stereochemistry` A/B type
+4. Interpret `predicted_polymer` — confirm SMILES matches expected chain extension
+5. Report `mibig_protein_hits` top hit and similarity — flag if unexpected or <70%
+6. Flag any mismatches explicitly
+7. Provide the `visualization_url`
+
+**Tip:** Pass `expected_domains` based on the RetroTide or TridentSynth output to get the `validation` section automatically instead of doing the comparison manually.
 
 ---
 
