@@ -734,12 +734,25 @@ def _servers_reachable() -> bool:
 
 
 def _cache_exists() -> bool:
-    """Return True only if the combined index cache has been built locally."""
+    """Return True only if the combined index cache is built and has sufficient entries."""
+    import json as _json
     cache = os.path.join(
         os.path.dirname(__file__),
         "..", "modules", "pks", "data", "combined_index.json",
     )
-    return os.path.exists(cache) and os.path.getsize(cache) > 1000
+    if not os.path.exists(cache) or os.path.getsize(cache) < 100_000:
+        return False
+    try:
+        with open(cache) as f:
+            data = _json.load(f)
+        # Need at least 1000 entries and at least one sbspks intermediate
+        has_intermediates = any(
+            e.get("source") == "sbspks" and e.get("is_intermediate")
+            for e in data[:500]
+        )
+        return len(data) >= 1000 and has_intermediates
+    except Exception:
+        return False
 
 
 @pytest.mark.skipif(
