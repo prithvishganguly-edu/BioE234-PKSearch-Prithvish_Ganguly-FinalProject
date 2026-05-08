@@ -1,4 +1,4 @@
-# Theory — search_pks Algorithm and Biological Background
+# Theory — PKS Pipeline Algorithms and Biological Background
 
 ---
 
@@ -100,6 +100,87 @@ This is based on the well-established PKS engineering principle that TE domain r
 
 ---
 
+## 7. Chemical Name Resolution (`resolve_smiles`)
+
+Before any computational analysis can begin, the target molecule must be represented as a SMILES (Simplified Molecular Input Line Entry System) string — a compact, text-based notation that encodes molecular structure as a sequence of atoms, bonds, branches, and ring closures. For example, acetic acid is `CC(=O)O` and benzene is `c1ccccc1`.
+
+Users often know a compound by its common name (e.g. "erythromycin"), trade name, or IUPAC systematic name rather than its SMILES. `resolve_smiles` bridges this gap using a two-step strategy:
+
+1. **Local SMILES validation** — The input string is first parsed by RDKit's `MolFromSmiles`. If it produces a valid molecule object, the input is already SMILES and is canonicalized (rewritten into RDKit's unique canonical form) and returned immediately with no network call. Canonicalization ensures that equivalent SMILES strings (e.g. `OCC` and `CCO`) map to the same representation.
+
+2. **PubChem REST lookup** — If the input is not valid SMILES, it is treated as a chemical name and submitted to the PubChem PUG REST API, which resolves the name against PubChem's database of >110 million compounds. The API returns the isomeric SMILES (preserving stereochemistry), molecular formula, and IUPAC name.
+
+This tool is the mandatory first step in the pipeline: all downstream tools (`assess_pks_feasibility`, `pks_design_retrotide`, `pks_search_sbspks`) require SMILES input.
+
+---
+
+## 8. PKS Feasibility Pre-screening (`assess_pks_feasibility`)
+
+Not every molecule is a viable target for type-I modular PKS biosynthesis. `assess_pks_feasibility` applies seven weighted heuristic checks derived from the known biosynthetic capabilities and constraints of type-I modular PKS systems:
+
+| Check | Weight | Rationale |
+|-------|--------|-----------|
+| **Molecular weight** | 0.12 | Known type-I PKS products range from ~100–2000 Da. Products outside this range require an impractical number of modules or are too small for meaningful PKS assembly. |
+| **Carbon chain length** | 0.15 | Each PKS extension module adds a two-carbon unit; at least 6 carbons are needed for a minimal 3-module assembly line. |
+| **Heteroatom content** | 0.14 | PKS assembles C/H/O backbones natively. Nitrogen, sulfur, and halogens require post-PKS tailoring enzymes (aminotransferases, halogenases) that fall outside the core PKS machinery. |
+| **Aromatic rings** | 0.12 | Type-I modular PKS produces linear or macrocyclic scaffolds. Aromatic rings are the domain of type-II (iterative) PKS and cannot be formed by the modular assembly line, though aromatic starter units are possible. |
+| **Oxygen/carbon ratio** | 0.16 | Polyketide intermediates typically have O/C ratios of 0.15–0.50, reflecting the ketone, hydroxyl, and ester functionalities introduced by KR/DH domains and TE-mediated lactonization. |
+| **Functional groups** | 0.21 | PKS-compatible functional groups include ketones, hydroxyl groups, alkenes, ethers, and esters. Groups like epoxides, azides, nitro groups, and phosphates are not accessible by PKS domains. |
+| **Ring complexity** | 0.10 | Single macrolactone rings are typical PKS products; 2–3 rings may be achievable with tailoring cyclases, but higher ring counts exceed typical PKS capability. |
+
+Each check returns a status of **pass** (multiplier 1.0), **warn** (0.5), or **fail** (0.0). The final score is the sum of each check's weight multiplied by its status multiplier. Molecules scoring ≥0.6 are considered feasible PKS targets; scores ≥0.8 are strong candidates. The score guides which downstream design tools to prioritize.
+
+---
+
+## 9. Retrobiosynthetic PKS Design (`retrotide_designer`)
+
+### The RetroTide Algorithm
+
+RetroTide performs **retrobiosynthesis**: given a target polyketide structure, it works backwards to propose chimeric type-I modular PKS assembly lines whose predicted product best matches the target. The algorithm, developed by Hagen et al. (2016), uses a combinatorial approach:
+
+1. **Target decomposition** — The target SMILES is parsed and its carbon backbone is analyzed to determine the number of extension modules needed and the pattern of oxidation states at each position (ketone, hydroxyl, alkene, or fully reduced methylene).
+
+2. **Module enumeration** — For each module position, RetroTide enumerates possible domain configurations from a library of characterized PKS domains. The key choices per module are:
+   - **AT substrate** — which extender unit (malonyl-CoA, methylmalonyl-CoA, ethylmalonyl-CoA, etc.) introduces the correct branching pattern
+   - **KR type and activity** — whether the beta-keto group is reduced and with which stereochemistry (A-type vs. B-type, yielding L- or D-configured alcohols)
+   - **DH activity** — whether dehydration occurs, producing an enoyl intermediate
+   - **ER activity** — whether the double bond is fully reduced
+
+3. **Product prediction** — Each candidate assembly line is fed through a structure prediction engine (BCS — Biosynthetic Cluster Simulator) that computes the product SMILES by simulating the sequential condensation, reduction, and release reactions.
+
+4. **Similarity ranking** — The predicted product of each design is compared to the target using chemical similarity metrics. Two scoring options are available:
+   - **Atom-pair similarity** (default) — counts the frequency of all pairs of atoms at given topological distances in the molecular graph
+   - **Atom-atom-path similarity** — considers the full atom-to-atom paths rather than just pairwise distances, providing a more path-sensitive comparison
+
+Designs are ranked by similarity score (1.0 = exact match) and the top candidates are returned. Each result includes the full module-by-module domain architecture, enabling direct implementation.
+
+### Chimeric PKS Engineering
+
+The designs RetroTide proposes are "chimeric" — they combine domains sourced from different natural PKS clusters. This is biologically grounded: domain swapping experiments have demonstrated that individual domains (particularly AT domains) can be exchanged between clusters while retaining function (Ruan et al., 1997; Reeves et al., 2001). RetroTide selects domains based on their characterized substrate specificity and reduction activity, drawing from a curated library of experimentally validated PKS domains.
+
+---
+
+## 10. Mapping Designs to Natural Parts (`match_design_to_parts`)
+
+A PKS design from RetroTide (or TridentSynth) specifies an abstract domain architecture — e.g., "module 2 needs an AT that loads methylmalonyl-CoA, an active B-type KR, and an active DH." To build this in the lab, each abstract domain must be matched to a real amino acid sequence from a characterized natural PKS.
+
+`match_design_to_parts` automates this mapping using the ClusterCAD database, which contains 531 experimentally characterized PKS clusters with full domain annotations:
+
+1. **Design normalization** — The tool accepts designs from either RetroTide or TridentSynth, which use different output formats. It normalizes both into a common representation: an ordered list of modules, each with its domain types and AT substrate annotation.
+
+2. **Module-by-module search** — For each module in the design, the tool queries ClusterCAD's domain index for natural modules with matching characteristics:
+   - AT substrate specificity (e.g., methylmalonyl-CoA)
+   - Presence of required reductive domains (KR, DH, ER)
+   - Loading module status (starter modules use different domain architectures)
+
+3. **Amino acid sequence retrieval** — For each matching natural module, the tool fetches the amino acid sequence of every domain from ClusterCAD's API. These sequences are the starting point for gene synthesis or domain swapping constructs.
+
+4. **Result assembly** — The output provides, for each design module, a ranked list of natural module matches with their source cluster, subunit, and per-domain amino acid sequences. This gives the engineer multiple options for each position in the chimeric PKS, enabling selection based on factors like phylogenetic compatibility or expression host preferences.
+
+This step connects computational design to physical DNA construction, closing the gap between in silico pathway prediction and wet-lab implementation.
+
+---
+
 ## References
 
 - Keatinge-Clay, A.T. (2012). The structures of type I polyketide synthases. *Natural Product Reports*, 29, 1050.
@@ -107,3 +188,8 @@ This is based on the well-established PKS engineering principle that TE domain r
 - Rogers, D. & Hahn, M. (2010). Extended-connectivity fingerprints. *Journal of Chemical Information and Modeling*, 50(5), 742–754.
 - Tanimoto, T.T. (1958). An elementary mathematical theory of classification and prediction. IBM Technical Report.
 - MIBiG Consortium (2023). MIBiG 3.0: a community-driven effort to annotate experimentally validated biosynthetic gene clusters. *Nucleic Acids Research*, 51, D603–D610.
+- Weininger, D. (1988). SMILES, a chemical language and information system. *Journal of Chemical Information and Computer Sciences*, 28(1), 31–36.
+- Kim, S. et al. (2021). PubChem in 2021: new data content and improved web interfaces. *Nucleic Acids Research*, 49, D1388–D1395.
+- Hagen, A. et al. (2016). Engineering a polyketide synthase for in vitro production of adipic acid. *ACS Synthetic Biology*, 5(1), 21–27.
+- Reeves, C.D. et al. (2001). Alteration of the substrate specificity of a modular polyketide synthase acyltransferase domain through site-directed mutagenesis. *Biochemistry*, 40(51), 15464–15470.
+- Eng, C.H. et al. (2018). ClusterCAD: a computational platform for type I modular polyketide synthase design. *Nucleic Acids Research*, 46(D1), D509–D515.
