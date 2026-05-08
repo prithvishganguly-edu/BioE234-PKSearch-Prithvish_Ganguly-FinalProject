@@ -1,5 +1,10 @@
 # TridentSynth Tool and GUI Contribution
 
+**Author:** Shalen Ardeshna 
+**Course:** BioE 134, Spring 2026  
+
+---
+
 ## Overview
 
 This contribution adds two main features to the PKS design MCP project:
