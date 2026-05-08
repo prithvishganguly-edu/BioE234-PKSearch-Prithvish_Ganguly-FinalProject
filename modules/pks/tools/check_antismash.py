@@ -141,10 +141,38 @@ class CheckAntiSmash:
                     "smiles": first[0].get("smiles"),
                 }
 
-        # BGC region clusters (populated for full-length constructs ≥10 kb)
+        # KnownClusterBlast — two levels of results live in clusterblast module.
+        clusterblast = rec.get("modules", {}).get("antismash.modules.clusterblast", {})
+        knowncluster = clusterblast.get("knowncluster", {})
+
+        # 1. Protein-level MIBiG matches — available even for short constructs.
+        #    Format per entry: [accession, name, bgc_accession, _, product_type, similarity%, ...]
+        mibig_protein_hits = []
+        for _region, cds_dict in knowncluster.get("mibig_entries", {}).items():
+            for gene_id, matches in cds_dict.items():
+             for match in matches[:3]:
+                if len(match) >= 6:
+                    mibig_protein_hits.append({
+                        "gene": gene_id,
+                        "protein_accession": match[0],
+                        "protein_name": match[1],
+                        "bgc_accession": match[2],
+                        "product_type": match[4],
+                        "similarity_pct": match[5],
+                    })
+        if mibig_protein_hits:
+            parsed_results["mibig_protein_hits"] = sorted(
+                mibig_protein_hits, key=lambda x: x["similarity_pct"], reverse=True
+            )[:5]
+
+        # 2. BGC region clusters — populated for full-length constructs (≥10 kb).
+        #    Cluster-level KnownClusterBlast hits are in knowncluster.results[n].ranking.
+        kcb_results = {r["region_number"]: r for r in knowncluster.get("results", [])}
+
         for region in rec.get("regions", []):
             products = region.get("products", [])
             if any("pks" in p.lower() or "nrps" in p.lower() for p in products):
+                region_num = region.get("region_number", region.get("idx", 1))
                 cluster_info = {
                     "type": products,
                     "location": f"Base pairs {region.get('start')} to {region.get('end')}",
@@ -158,12 +186,16 @@ class CheckAntiSmash:
                             "domains": [d.get("name") for d in mod.get("domains", [])],
                             "predicted_substrate": mod.get("predictions", {}).get("specificity", "Unknown"),
                         })
-                known_hits = region.get("knownclusterblast", {}).get("hits", [])
-                for hit in known_hits[:3]:
-                    cluster_info["known_cluster_hits"].append({
-                        "name": hit.get("name"),
-                        "similarity": f"{hit.get('similarity_score', 0)}%",
-                    })
+                # Cluster-level hits from ranking list: [[cluster_dict, score_dict], ...]
+                for entry in kcb_results.get(region_num, {}).get("ranking", [])[:3]:
+                    if len(entry) >= 2:
+                        cdict, sdict = entry[0], entry[1]
+                        cluster_info["known_cluster_hits"].append({
+                            "bgc_accession": cdict.get("accession"),
+                            "description": cdict.get("description"),
+                            "similarity_pct": sdict.get("similarity"),
+                            "hits": sdict.get("hits"),
+                        })
                 parsed_results["pks_clusters"].append(cluster_info)
 
         return parsed_results
