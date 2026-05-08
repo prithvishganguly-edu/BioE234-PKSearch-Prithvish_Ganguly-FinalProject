@@ -118,8 +118,8 @@ def test_assess_feasibility_polyketide_backbone():
 def test_assess_feasibility_benzene_low_score():
     result = assess_pks_feasibility("c1ccccc1")
     assert result["score"] < 0.8
-    failed_checks = [c for c in result["checks"] if c["status"] == "fail"]
-    assert len(failed_checks) >= 2
+    non_pass = [c for c in result["checks"] if c["status"] in ("fail", "warn")]
+    assert len(non_pass) >= 2
 
 
 def test_assess_feasibility_empty_smiles():
@@ -191,10 +191,11 @@ def test_assess_feasibility_molecular_properties_counts():
     assert props["num_halogens"] == 0
 
 
-def test_assess_feasibility_no_oxygen_fails():
+def test_assess_feasibility_no_oxygen_warns():
     result = assess_pks_feasibility("CCCCCCCC")
     oxy_check = [c for c in result["checks"] if c["name"] == "oxygen_ratio"][0]
-    assert oxy_check["status"] == "fail"
+    assert oxy_check["status"] == "warn"
+    assert "fully reducing" in oxy_check["detail"].lower()
 
 
 def test_assess_feasibility_high_aromatic_fails():
@@ -205,9 +206,10 @@ def test_assess_feasibility_high_aromatic_fails():
 
 def test_assess_feasibility_very_small_molecule():
     result = assess_pks_feasibility("CC")
-    assert result["feasible"] is False
     chain_check = [c for c in result["checks"] if c["name"] == "carbon_chain_length"][0]
     assert chain_check["status"] == "fail"
+    mw_check = [c for c in result["checks"] if c["name"] == "molecular_weight"][0]
+    assert mw_check["status"] == "fail"
 
 
 def test_assess_feasibility_sulfur_warns():

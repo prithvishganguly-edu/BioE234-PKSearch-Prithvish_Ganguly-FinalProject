@@ -309,124 +309,136 @@
     "notes": "Spinosad returns sim=0.91 (not 1.0) due to SMILES differences between PubChem and SBSPKS. Should show Spinosad as top hit with high similarity and include intermediate hits."
   },
   {
-    "prompt": "List all available PKS clusters in ClusterCAD.",
-    "expected_tool": "clustercad_list_clusters",
-    "expected_args": { "reviewed_only": true, "max_results": 20 },
-    "notes": "Basic browse request — should return reviewed clusters by default."
+    "prompt": "Use TridentSynth to find a PKS plus chemical synthesis pathway for hexane. The target SMILES is CCCCCC.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "wait_for_completion": true
+    },
+    "notes": "Basic live TridentSynth test for hexane using PKS plus one chemical step. Expected result should include decarboxylation to hexane."
   },
   {
-    "prompt": "Show me all PKS clusters in ClusterCAD, including unreviewed ones.",
-    "expected_tool": "clustercad_list_clusters",
-    "expected_args": { "reviewed_only": false, "max_results": 20 },
-    "notes": "Tests that reviewed_only is set to false when user asks for all clusters."
+    "prompt": "Run TridentSynth on CCCCCCC using PKS and one chemical step. Return the PKS modules, reaction SMILES, pathway structures, reaction rule, and enthalpy.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "wait_for_completion": true
+    },
+    "notes": "Tests live PKS + chemical TridentSynth pathway parsing for heptane and checks that Gemini asks for the detailed text fields."
   },
   {
-    "prompt": "What PKS clusters are available for Abyssomicin?",
-    "expected_tool": "clustercad_list_clusters",
-    "expected_args": { "reviewed_only": false, "max_results": 20 },
-    "notes": "Gemini should call list_clusters to find the accession, not ask the user for it."
+    "prompt": "Use TridentSynth to synthesize heptane from SMILES CCCCCCC with PKS and chemistry only. Do not use biological tailoring.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "wait_for_completion": true
+    },
+    "notes": "Tests that 'chemistry only' maps to use_chem=true and use_bio=false while still using PKS."
   },
   {
-    "prompt": "How many subunits and modules does the Erythromycin PKS have?",
-    "expected_tool": "clustercad_cluster_details",
-    "expected_args": { "mibig_accession": "<resolved from clustercad_list_clusters>" },
-    "notes": "Gemini must first call clustercad_list_clusters to find the accession, then call clustercad_cluster_details."
+    "prompt": "Submit hexane to TridentSynth as CCCCCC using PKS and chemical synthesis, but only submit the job without waiting for the full result.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "wait_for_completion": false
+    },
+    "notes": "Tests quick submission mode where the tool should return a task ID without polling the results page."
   },
   {
-    "prompt": "Give me a summary of BGC0001492.1.",
-    "expected_tool": "clustercad_cluster_details",
-    "expected_args": { "mibig_accession": "BGC0001492.1" },
-    "notes": "User provides accession directly — Gemini should skip list_clusters and call cluster_details directly."
+    "prompt": "Run TridentSynth for CCCCCCC using PKS, biological synthesis, and chemical synthesis with one bio step and one chemical step.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCCC",
+      "use_pks": true,
+      "use_bio": true,
+      "use_chem": true,
+      "max_bio_steps": 1,
+      "max_chem_steps": 1,
+      "wait_for_completion": true
+    },
+    "notes": "Tests all three TridentSynth synthesis strategies and explicit bio/chem step counts."
   },
   {
-    "prompt": "What is the full domain architecture of the Abyssomicin PKS?",
-    "expected_tool": "clustercad_get_subunits",
-    "expected_args": { "mibig_accession": "<resolved from clustercad_list_clusters>" },
-    "notes": "Gemini must call clustercad_list_clusters first to find the accession for Abyssomicin."
+    "prompt": "Use TridentSynth to find a PKS-only route to tiglic acid, SMILES CC=C(C)C(=O)O.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CC=C(C)C(=O)O",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": false,
+      "wait_for_completion": true
+    },
+    "notes": "Tests PKS-only pathway selection for a small acid target."
   },
   {
-    "prompt": "Show me the domain architecture of BGC0001492.1 module by module.",
-    "expected_tool": "clustercad_get_subunits",
-    "expected_args": { "mibig_accession": "BGC0001492.1" },
-    "notes": "User provides accession directly — Gemini should call clustercad_get_subunits directly."
+    "prompt": "Run TridentSynth on pyruvic acid CC(C(O)=O)=O using biology only with one biological step.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CC(C(O)=O)=O",
+      "use_pks": false,
+      "use_bio": true,
+      "use_chem": false,
+      "max_bio_steps": 1,
+      "wait_for_completion": true
+    },
+    "notes": "Tests non-PKS TridentSynth mode with biological synthesis only."
   },
   {
-    "prompt": "What intermediate does each module of the Abyssomicin PKS produce?",
-    "expected_tool": "clustercad_get_subunits",
-    "expected_args": { "mibig_accession": "<resolved from clustercad_list_clusters>" },
-    "notes": "Tests that Gemini reports product_smiles for each module from the get_subunits output."
+    "prompt": "Use TridentSynth for CCCCCC with PKS and chemistry, thiolysis release, malonyl-CoA and methylmalonyl-CoA starters, and malonyl-CoA and methylmalonyl-CoA extenders.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "pks_release_mechanism": "thiolysis",
+      "pks_starters": ["Malonyl-CoA", "Methylmalonyl-CoA"],
+      "pks_extenders": ["Malonyl-CoA", "Methylmalonyl-CoA"],
+      "wait_for_completion": true
+    },
+    "notes": "Tests explicit PKS option parsing for release mechanism, starters, and extenders."
   },
   {
-    "prompt": "Give me the amino acid sequence of the AT domain in module 0 of Abyssomicin.",
-    "expected_tool": "clustercad_domain_lookup",
-    "expected_args": { "domain_id": "<resolved from clustercad_get_subunits>" },
-    "notes": "Gemini must chain: list_clusters → get_subunits → domain_lookup. Never ask user for the domain ID."
+    "prompt": "Use TridentSynth to search for a pathway to CCCCCC with PKS plus one chemical step, but limit DORAnet to molecules with at most 8 carbons, 0 nitrogens, and 2 oxygens.",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "CCCCCC",
+      "use_pks": true,
+      "use_bio": false,
+      "use_chem": true,
+      "max_chem_steps": 1,
+      "max_carbon": 8,
+      "max_nitrogen": 0,
+      "max_oxygen": 2,
+      "wait_for_completion": true
+    },
+    "notes": "Tests optional atom-count filters max_carbon, max_nitrogen, and max_oxygen."
   },
   {
-    "prompt": "What is the amino acid sequence of domain 27717?",
-    "expected_tool": "clustercad_domain_lookup",
-    "expected_args": { "domain_id": 27717 },
-    "notes": "User provides domain ID directly — Gemini should call domain_lookup directly without chaining."
-  },
-  {
-    "prompt": "Get the DNA sequence of the AbsB1 subunit in Abyssomicin.",
-    "expected_tool": "clustercad_subunit_lookup",
-    "expected_args": { "subunit_id": "<resolved from clustercad_get_subunits>" },
-    "notes": "Gemini must chain: list_clusters → get_subunits → subunit_lookup to find the subunit ID."
-  },
-  {
-    "prompt": "What is the GenBank accession for the first subunit of Abyssomicin?",
-    "expected_tool": "clustercad_subunit_lookup",
-    "expected_args": { "subunit_id": "<resolved from clustercad_get_subunits>" },
-    "notes": "Tests that Gemini reports the genbank_accession field from subunit_lookup output."
-  },
-  {
-    "prompt": "Give me the full protein and DNA sequence for subunit 24119.",
-    "expected_tool": "clustercad_subunit_lookup",
-    "expected_args": { "subunit_id": 24119 },
-    "notes": "User provides subunit ID directly — Gemini should call subunit_lookup directly."
-  },
-  {
-    "prompt": "Which PKS clusters have an AT domain that loads malonyl-CoA in the loading module?",
-    "expected_tool": "clustercad_search_domains",
-    "expected_args": { "domain_type": "AT", "annotation_contains": "malonyl", "loading_module_only": true, "max_results": 10 },
-    "notes": "Tests substrate search with loading module filter and synonym translation."
-  },
-  {
-    "prompt": "Find PKS modules that load butyryl-CoA.",
-    "expected_tool": "clustercad_search_domains",
-    "expected_args": { "domain_type": "AT", "annotation_contains": "butyryl", "loading_module_only": true },
-    "notes": "Tests synonym translation: butyryl → butmal. Gemini should NOT ask the user what ClusterCAD calls butyryl-CoA."
-  },
-  {
-    "prompt": "Search for PKS modules that have active KR, DH, and ER domains — a fully reducing module.",
-    "expected_tool": "clustercad_search_domains",
-    "expected_args": { "domain_types": ["KR", "DH", "ER"], "active_only": true, "max_results": 10 },
-    "notes": "Tests domain_types list input and active_only filter."
-  },
-  {
-    "prompt": "Find PKS modules that use methylmalonyl-CoA but have an inactive DH domain.",
-    "expected_tool": "clustercad_search_domains",
-    "expected_args": { "domain_type": "AT", "annotation_contains": "methylmalonyl", "exclude_annotation": "inactive" },
-    "notes": "Tests annotation search combined with exclude_annotation filter."
-  },
-  {
-    "prompt": "What reviewed PKS clusters with more than 10 modules use propionyl-CoA as a starter?",
-    "expected_tool": "clustercad_search_domains",
-    "expected_args": { "domain_type": "AT", "annotation_contains": "propionyl", "loading_module_only": true, "reviewed_only": true, "min_modules": 10 },
-    "notes": "Tests combination of reviewed_only, min_modules, and loading_module_only filters."
-  },
-  {
-    "prompt": "Design a PKS for erythromycin and then find real natural modules I can use to build it.",
-    "expected_tool": "match_design_to_parts",
-    "expected_args": { "design": "<RetroTide design from prior call>", "source": "retrotide" },
-    "notes": "Full pipeline test: resolve_smiles → assess_pks_feasibility → pks_design_retrotide → match_design_to_parts using ClusterCAD tools."
-  },
-  {
-    "prompt": "Find PKS clusters related to the Erythromycin PKS and show me their domain architectures.",
-    "expected_tool": "clustercad_get_subunits",
-    "expected_args": { "mibig_accession": "<resolved from clustercad_list_clusters>" },
-    "notes": "Tests chaining list_clusters → get_subunits for a named compound."
+    "prompt": "Can TridentSynth make this target: C.CC?",
+    "expected_tool": "tridentsynth",
+    "expected_args": {
+      "target_smiles": "C.CC",
+      "use_pks": true,
+      "wait_for_completion": true
+    },
+    "notes": "Validation test: target contains '.', so the tool should reject it because TridentSynth accepts one molecule at a time."
   }
-
 ]
