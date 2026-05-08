@@ -39,13 +39,100 @@
     "prompt": "Submit this DNA sequence to antiSMASH to check the PKS domains. Sequence: ATGCGT",
     "expected_tool": "submit_antismash",
     "expected_args": { "seq": "ATGCGT" },
-    "notes": "Tests API submission."
+    "notes": "Tests API submission. Note: this sequence is <1000 bp so the tool will raise a ValueError before submitting — expected behavior."
   },
   {
     "prompt": "Check the status of my antiSMASH job ID 12345.",
     "expected_tool": "check_antismash",
     "expected_args": { "job_id": "12345" },
     "notes": "Tests results parsing."
+  },
+
+  {
+    "prompt": "Convert the amino acid sequence MKVLSAFG to DNA optimized for Streptomyces coelicolor.",
+    "expected_tool": "reverse_translate",
+    "expected_args": { "aa_sequence": "MKVLSAFG", "host": "s_coelicolor" },
+    "notes": "Tests full organism name parsing for S. coelicolor — a key PKS host."
+  },
+  {
+    "prompt": "Reverse translate ACDEFGHIKLMNPQRSTVWY for E. coli and name the file all_amino_acids.gb.",
+    "expected_tool": "reverse_translate",
+    "expected_args": { "aa_sequence": "ACDEFGHIKLMNPQRSTVWY", "host": "e_coli", "filename": "all_amino_acids.gb" },
+    "notes": "Tests all 20 standard amino acids and custom filename."
+  },
+  {
+    "prompt": "Generate a codon-optimized gene for the sequence MPKLATVG in Pseudomonas putida.",
+    "expected_tool": "reverse_translate",
+    "expected_args": { "aa_sequence": "MPKLATVG", "host": "p_putida" },
+    "notes": "Tests P. putida host alias."
+  },
+  {
+    "prompt": "I have this protein sequence from a PKS module: MSTVGLAEK. Optimize it for yeast expression.",
+    "expected_tool": "reverse_translate",
+    "expected_args": { "aa_sequence": "MSTVGLAEK", "host": "s_cerevisiae" },
+    "notes": "Tests yeast host alias and natural-language framing."
+  },
+  {
+    "prompt": "Reverse translate MKAT and save it as module1_scoel.gb for Streptomyces albus.",
+    "expected_tool": "reverse_translate",
+    "expected_args": { "aa_sequence": "MKAT", "host": "s_albus", "filename": "module1_scoel.gb" },
+    "notes": "Tests S. albus host and custom filename together."
+  },
+  {
+    "prompt": "Turn this amino acid sequence into DNA for S. venezuelae: MGASTVLD.",
+    "expected_tool": "reverse_translate",
+    "expected_args": { "aa_sequence": "MGASTVLD", "host": "s_venezuelae" },
+    "notes": "Tests S. venezuelae host alias."
+  },
+
+  {
+    "prompt": "Send this DNA to antiSMASH for analysis: ATGAAACGTATGTAA",
+    "expected_tool": "submit_antismash",
+    "expected_args": { "seq": "ATGAAACGTATGTAA" },
+    "notes": "Basic submission with a minimal valid ORF (ATG start, TAA stop)."
+  },
+  {
+    "prompt": "Verify the PKS domains in this construct by submitting it to antiSMASH: ATGGTCGCCGTCGTCGCC",
+    "expected_tool": "submit_antismash",
+    "expected_args": { "seq": "ATGGTCGCCGTCGTCGCC" },
+    "notes": "Natural-language phrasing — 'verify domains' should trigger submit_antismash."
+  },
+  {
+    "prompt": "I just reverse translated a PKS module for S. coelicolor. Can you submit the DNA to antiSMASH to check it?",
+    "expected_tool": "submit_antismash",
+    "expected_args": { "seq": "<DNA from reverse_translate output>" },
+    "notes": "Tests chaining — Gemini should extract the DNA string from the prior reverse_translate result and pass it here."
+  },
+  {
+    "prompt": "Run antiSMASH on ATGCGTAAATAA and tell me what biosynthetic clusters it finds.",
+    "expected_tool": "submit_antismash",
+    "expected_args": { "seq": "ATGCGTAAATAA" },
+    "notes": "Tests that 'run antiSMASH' phrasing maps to submit_antismash, not check_antismash."
+  },
+
+  {
+    "prompt": "Check my antiSMASH job bacteria-1abc9db1-4f2e-4ab3-a5dd-21210cb2f4b8.",
+    "expected_tool": "check_antismash",
+    "expected_args": { "job_id": "bacteria-1abc9db1-4f2e-4ab3-a5dd-21210cb2f4b8" },
+    "notes": "Full job ID format — tests that the full bacteria-UUID string is passed unchanged."
+  },
+  {
+    "prompt": "Is my antiSMASH job done yet? The ID is bacteria-3e53eb54-3803-4330-bd35-8b4ac63836b8.",
+    "expected_tool": "check_antismash",
+    "expected_args": { "job_id": "bacteria-3e53eb54-3803-4330-bd35-8b4ac63836b8" },
+    "notes": "Natural phrasing for polling — should call check_antismash, not submit_antismash."
+  },
+  {
+    "prompt": "What PKS domains did antiSMASH find for job bacteria-7fe3113f-6aac-4c47-9696-4cc22a50cf54?",
+    "expected_tool": "check_antismash",
+    "expected_args": { "job_id": "bacteria-7fe3113f-6aac-4c47-9696-4cc22a50cf54" },
+    "notes": "Tests that domain-results phrasing routes to check, not submit."
+  },
+  {
+    "prompt": "Get the results for antiSMASH job bacteria-aae6a1b0-bcd5-4018-bb27-0299f851b037 and compare the detected domains to what RetroTide proposed.",
+    "expected_tool": "check_antismash",
+    "expected_args": { "job_id": "bacteria-aae6a1b0-bcd5-4018-bb27-0299f851b037" },
+    "notes": "Tests the validation use case — Gemini should retrieve results then cross-reference against the prior RetroTide output in context."
   },
   {
     "prompt": "What is the SMILES for erythromycin?",
