@@ -62,8 +62,7 @@ Use when:
   each with status (pass/warn/fail), detail string, and weight
 - `recommendation` (str) — guidance on which tool to use next
 
-**Interpreting results — all three design tools run in parallel regardless of score;
-the score determines which results to emphasize:**
+**Interpreting results:**
 - Score ≥ 0.8 → strong PKS target; lead with `pks_design_retrotide`, also check `pks_search_sbspks` for existing pathway shortcuts
 - Score 0.6–0.8 → moderate target; lead with `pks_search_sbspks` for similar known intermediates, also check retrotide and `tridentsynth`
 - Score < 0.6 → poor PKS target; lead with `tridentsynth` for hybrid pathways, `pks_search_sbspks` may still find distantly related scaffolds
@@ -138,6 +137,11 @@ Use when the user asks to:
 6. `bgc_url` — show as a clickable link if present (e.g. "MIBiG page: https://mibig.secondarymetabolites.org/go/BGC0000094")
 7. `engineering_hint` — show in full if present, never omit
 8. `engineering_recommendation` — always show this last; it is the most actionable field for the researcher
+
+**IMPORTANT — when to stop after pks_search_sbspks:**
+- If any result has `similarity_score=1.0` → the compound is already made naturally. Report the exact match and assembly line. Do NOT call retrotide or tridentsynth — they are unnecessary and will confuse the researcher.
+- If best score is 0.4–0.99 → report the hits, then optionally suggest the researcher run retrotide to compare module architectures.
+- If no hits above 0.4 → then call retrotide and/or tridentsynth to design a pathway from scratch.
 
 **Interpreting results:**
 - `similarity_score` 1.0 = exact match already in database

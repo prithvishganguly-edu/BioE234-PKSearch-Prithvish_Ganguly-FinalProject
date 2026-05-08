@@ -253,5 +253,35 @@
     "expected_tool": "pks_search_sbspks",
     "expected_args": { "query_smiles": "<resolved from resolve_smiles>", "search_type": "reaction_search" },
     "notes": "Explicit two-step request. Gemini must call resolve_smiles first, then pks_search_sbspks."
+  },
+  {
+    "prompt": "I want to make pikromycin, has it been done before?",
+    "expected_tool": "pks_search_sbspks",
+    "expected_args": { "query_smiles": "<resolved from resolve_smiles>", "search_type": "reaction_search", "similarity_threshold": 0.6 },
+    "notes": "Exact match case — Pikromycin has sim=1.0 in SBSPKS. Gemini must NOT call retrotide or tridentsynth after finding the exact match."
+  },
+  {
+    "prompt": "Does this SMILES match any known PKS biosynthetic intermediate: CCC(O)C(C)C(S)=O",
+    "expected_tool": "pks_search_sbspks",
+    "expected_args": { "query_smiles": "CCC(O)C(C)C(S)=O", "search_type": "reaction_search", "similarity_threshold": 0.6 },
+    "notes": "Raw intermediate SMILES — matches erythromycin module 2 intermediate. Should return is_intermediate=true with engineering_hint about TE domain relocation."
+  },
+  {
+    "prompt": "Find PKS pathways similar to lovastatin.",
+    "expected_tool": "pks_search_sbspks",
+    "expected_args": { "query_smiles": "<resolved from resolve_smiles>", "search_type": "reaction_search", "similarity_threshold": 0.4 },
+    "notes": "Lovastatin is an iterative PKS product — exact match in both SBSPKS and MIBiG. MIBiG hit should include bgc_url."
+  },
+  {
+    "prompt": "Search for natural products similar to this molecule: CC(=O)CCCC(=O)O",
+    "expected_tool": "pks_search_sbspks",
+    "expected_args": { "query_smiles": "CC(=O)CCCC(=O)O", "search_type": "reaction_search", "similarity_threshold": 0.6 },
+    "notes": "Levulinic acid — not a polyketide. Should return no hits above 0.6 threshold. Gemini should suggest lowering the threshold or trying a different compound."
+  },
+  {
+    "prompt": "What natural PKS pathways are closest to spinosad?",
+    "expected_tool": "pks_search_sbspks",
+    "expected_args": { "query_smiles": "<resolved from resolve_smiles>", "search_type": "reaction_search", "similarity_threshold": 0.4 },
+    "notes": "Spinosad returns sim=0.91 (not 1.0) due to SMILES differences between PubChem and SBSPKS. Should show Spinosad as top hit with high similarity and include intermediate hits."
   }
 ]
