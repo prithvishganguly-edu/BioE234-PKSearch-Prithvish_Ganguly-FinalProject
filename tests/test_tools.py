@@ -8,10 +8,6 @@ direct imports continue to work for students who prefer that style.
 """
 
 import pytest
-from modules.pks.tools.assess_pks_feasibility import assess_pks_feasibility
-from modules.pks.tools.resolve_smiles import resolve_smiles
-from modules.pks.tools.retrotide_designer import retrotide_designer
-from modules.pks.tools.match_design_to_parts import match_design_to_parts
 
 
 """

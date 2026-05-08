@@ -3,14 +3,14 @@ Unit tests for JGK's tools:
   - resolve_smiles
   - assess_pks_feasibility
   - retrotide_designer
-  - match_design_to_parts
+  - find_pks_module_parts (formerly match_design_to_parts)
 """
 
 import pytest
 from modules.pks.tools.assess_pks_feasibility import assess_pks_feasibility
 from modules.pks.tools.resolve_smiles import resolve_smiles
 from modules.pks.tools.retrotide_designer import retrotide_designer
-from modules.pks.tools.match_design_to_parts import match_design_to_parts
+from modules.pks.tools.match_design_to_parts import find_pks_module_parts
 
 
 # ── resolve_smiles tests ─────────────────────────────────────────────
@@ -357,170 +357,144 @@ def test_retrotide_capped_at_hard_limit():
     assert len(results) <= 25
 
 
-# ── match_design_to_parts tests ─────────────────────────────────────
+# ── find_pks_module_parts tests ─────────────────────────────────────
+
+# -- Validation --
+
+def test_find_module_invalid_max_matches_zero():
+    with pytest.raises(ValueError, match="max_matches"):
+        find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches=0)
 
 
-def test_match_design_invalid_source():
-    design = {"modules": [{"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}}]}
-    with pytest.raises(ValueError, match="source must be"):
-        match_design_to_parts(design, source="invalid")
+def test_find_module_invalid_max_matches_negative():
+    with pytest.raises(ValueError, match="max_matches"):
+        find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches=-1)
 
 
-def test_match_design_empty_design():
+def test_find_module_invalid_max_matches_type():
     with pytest.raises(ValueError):
-        match_design_to_parts({}, source="retrotide")
+        find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches="three")
 
 
-def test_match_design_none_design():
-    with pytest.raises(ValueError):
-        match_design_to_parts(None, source="retrotide")
+def test_find_module_unrecognized_domain():
+    with pytest.raises(ValueError, match="Unrecognized"):
+        find_pks_module_parts(loading=True, reductive_domains="ZZ")
 
 
-def test_match_design_retrotide_no_modules():
-    with pytest.raises(ValueError, match="no 'modules'"):
-        match_design_to_parts({"rank": 1}, source="retrotide")
+def test_find_module_unrecognized_mixed_domains():
+    with pytest.raises(ValueError, match="Unrecognized"):
+        find_pks_module_parts(loading=True, reductive_domains="KR,FAKE")
 
 
-def test_match_design_tridentsynth_no_modules():
-    with pytest.raises(ValueError, match="no 'pks_modules'"):
-        match_design_to_parts({"ok": True}, source="tridentsynth")
+# -- Parsing --
+
+def test_find_module_parse_comma_separated():
+    from modules.pks.tools.match_design_to_parts import FindPKSModuleParts
+    assert FindPKSModuleParts._parse_reductive_domains("KR,DH,ER") == ["KR", "DH", "ER"]
 
 
-def test_match_design_invalid_max_matches():
-    design = {"modules": [{"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}}]}
-    with pytest.raises(ValueError, match="max_matches_per_module"):
-        match_design_to_parts(design, source="retrotide", max_matches_per_module=0)
+def test_find_module_parse_single_domain():
+    from modules.pks.tools.match_design_to_parts import FindPKSModuleParts
+    assert FindPKSModuleParts._parse_reductive_domains("KR") == ["KR"]
 
 
-def test_match_design_negative_max_matches():
-    design = {"modules": [{"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}}]}
-    with pytest.raises(ValueError, match="max_matches_per_module"):
-        match_design_to_parts(design, source="retrotide", max_matches_per_module=-1)
+def test_find_module_parse_empty_string():
+    from modules.pks.tools.match_design_to_parts import FindPKSModuleParts
+    assert FindPKSModuleParts._parse_reductive_domains("") == []
 
 
-def test_match_design_source_case_insensitive():
-    design = {"modules": [{"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}}]}
-    try:
-        match_design_to_parts(design, source="RETROTIDE", max_matches_per_module=1)
-    except Exception as exc:
-        assert "source must be" not in str(exc)
+def test_find_module_parse_whitespace_handling():
+    from modules.pks.tools.match_design_to_parts import FindPKSModuleParts
+    assert FindPKSModuleParts._parse_reductive_domains("KR, DH , ER") == ["KR", "DH", "ER"]
 
 
-def test_match_design_source_whitespace_stripped():
-    design = {"modules": [{"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}}]}
-    try:
-        match_design_to_parts(design, source="  retrotide  ", max_matches_per_module=1)
-    except Exception as exc:
-        assert "source must be" not in str(exc)
+def test_find_module_parse_case_insensitive():
+    from modules.pks.tools.match_design_to_parts import FindPKSModuleParts
+    assert FindPKSModuleParts._parse_reductive_domains("kr,dh,er") == ["KR", "DH", "ER"]
 
 
-def test_match_design_retrotide_empty_modules_list():
-    with pytest.raises(ValueError, match="no 'modules'"):
-        match_design_to_parts({"modules": []}, source="retrotide")
+# -- Output structure --
+
+def test_find_module_output_keys():
+    result = find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches=1)
+    for key in ("loading", "at_substrate", "reductive_domains", "total_matches", "matches", "warnings"):
+        assert key in result
 
 
-def test_match_design_tridentsynth_empty_modules_list():
-    with pytest.raises(ValueError, match="no modules"):
-        match_design_to_parts({"pks_modules": []}, source="tridentsynth")
+def test_find_module_output_types():
+    result = find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches=1)
+    assert isinstance(result["loading"], bool)
+    assert isinstance(result["reductive_domains"], list)
+    assert isinstance(result["total_matches"], int)
+    assert isinstance(result["matches"], list)
+    assert isinstance(result["warnings"], list)
 
 
-def test_match_design_tridentsynth_nested_result_format():
-    design = {
-        "result": {
-            "pks_modules": [
-                {
-                    "module_type": "starter",
-                    "domains": [
-                        {"domain": "AT", "substrate": "Malonyl-CoA"},
-                        {"domain": "ACP"},
-                    ],
-                }
-            ]
-        }
-    }
-    try:
-        result = match_design_to_parts(design, source="tridentsynth", max_matches_per_module=1)
-        assert result["source"] == "tridentsynth"
-        assert result["total_modules"] == 1
-    except Exception:
-        pass
+def test_find_module_total_matches_equals_len():
+    result = find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches=3)
+    assert result["total_matches"] == len(result["matches"])
+
+
+def test_find_module_echoes_inputs():
+    result = find_pks_module_parts(loading=False, at_substrate="Methylmalonyl-CoA", reductive_domains="KR,DH", max_matches=1)
+    assert result["loading"] is False
+    assert result["at_substrate"] == "Methylmalonyl-CoA"
+    assert result["reductive_domains"] == ["KR", "DH"]
+
+
+def test_find_module_empty_substrate_returns_none():
+    result = find_pks_module_parts(loading=True, at_substrate="", reductive_domains="KR", max_matches=1)
+    assert result["at_substrate"] is None
+
+
+# -- Functional tests (hit ClusterCAD cache) --
+
+@pytest.mark.slow
+def test_find_module_loading_malonyl():
+    result = find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches=3)
+    assert result["total_matches"] >= 0
+    assert isinstance(result["matches"], list)
 
 
 @pytest.mark.slow
-def test_match_design_retrotide_functional():
-    design = {
-        "rank": 1,
-        "similarity": 0.5,
-        "product_smiles": "CCCC(=O)O",
-        "modules": [
-            {"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}},
-        ],
-        "exact_match": False,
-    }
-    result = match_design_to_parts(design, source="retrotide", max_matches_per_module=1)
-    assert result["source"] == "retrotide"
-    assert result["total_modules"] == 1
-    assert "module_matches" in result
-    assert "warnings" in result
-    assert len(result["module_matches"]) == 1
-    match = result["module_matches"][0]
-    assert match["module_index"] == 0
-    assert match["loading"] is True
-    assert "design_domains" in match
-    assert "natural_matches" in match
+def test_find_module_extension_with_reductive_loop():
+    result = find_pks_module_parts(loading=False, at_substrate="Methylmalonyl-CoA", reductive_domains="KR,DH,ER", max_matches=3)
+    assert result["total_matches"] >= 0
 
 
 @pytest.mark.slow
-def test_match_design_retrotide_multi_module():
-    design = {
-        "rank": 1,
-        "similarity": 0.7,
-        "product_smiles": "CCC(O)CC(=O)O",
-        "modules": [
-            {"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}},
-            {"loading": False, "domains": {"AT": {"substrate": "Methylmalonyl-CoA"}, "KR": {"type": "B1"}}},
-        ],
-        "exact_match": False,
-    }
-    result = match_design_to_parts(design, source="retrotide", max_matches_per_module=2)
-    assert result["total_modules"] == 2
-    assert len(result["module_matches"]) == 2
-    for mm in result["module_matches"]:
-        assert "module_index" in mm
-        assert "natural_matches" in mm
+def test_find_module_respects_max_matches():
+    result = find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches=2)
+    assert len(result["matches"]) <= 2
 
 
 @pytest.mark.slow
-def test_match_design_output_has_aa_sequences():
-    design = {
-        "rank": 1,
-        "similarity": 0.5,
-        "product_smiles": "CCCC(=O)O",
-        "modules": [
-            {"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}},
-        ],
-        "exact_match": False,
-    }
-    result = match_design_to_parts(design, source="retrotide", max_matches_per_module=1)
-    for mm in result["module_matches"]:
-        for nat in mm["natural_matches"]:
-            assert "domains" in nat
-            for dom in nat["domains"]:
-                assert "domain_type" in dom
-                assert "aa_sequence" in dom
+def test_find_module_matches_have_domains():
+    result = find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches=1)
+    for m in result["matches"]:
+        assert "accession" in m
+        assert "cluster_name" in m
+        assert "domains" in m
+        for dom in m["domains"]:
+            assert "domain_type" in dom
+            assert "domain_id" in dom
+            assert "aa_sequence" in dom
 
 
 @pytest.mark.slow
-def test_match_design_modules_with_matches_count():
-    design = {
-        "rank": 1,
-        "similarity": 0.5,
-        "product_smiles": "CCCC(=O)O",
-        "modules": [
-            {"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}},
-        ],
-        "exact_match": False,
-    }
-    result = match_design_to_parts(design, source="retrotide", max_matches_per_module=1)
-    matched = sum(1 for m in result["module_matches"] if m["natural_matches"])
-    assert result["modules_with_matches"] == matched
+def test_find_module_aa_sequences_populated():
+    result = find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches=1)
+    if result["matches"]:
+        has_seq = any(
+            dom["aa_sequence"] is not None
+            for m in result["matches"]
+            for dom in m["domains"]
+        )
+        assert has_seq
+
+
+@pytest.mark.slow
+def test_find_module_warnings_are_strings():
+    result = find_pks_module_parts(loading=True, at_substrate="Malonyl-CoA", max_matches=1)
+    for w in result["warnings"]:
+        assert isinstance(w, str)

@@ -160,22 +160,17 @@ The designs RetroTide proposes are "chimeric" — they combine domains sourced f
 
 ---
 
-## 10. Mapping Designs to Natural Parts (`match_design_to_parts`) -- Johanna Kann
+## 10. Mapping Designs to Natural Parts (`find_pks_module_parts`) -- Johanna Kann
 
 A PKS design from RetroTide (or TridentSynth) specifies an abstract domain architecture — e.g., "module 2 needs an AT that loads methylmalonyl-CoA, an active B-type KR, and an active DH." To build this in the lab, each abstract domain must be matched to a real amino acid sequence from a characterized natural PKS.
 
-`match_design_to_parts` automates this mapping using the ClusterCAD database, which contains 531 experimentally characterized PKS clusters with full domain annotations:
+`find_pks_module_parts` automates this mapping one module at a time using the ClusterCAD database, which contains 531 experimentally characterized PKS clusters with full domain annotations. The tool accepts simple scalar inputs — whether the module is a loading module, its AT substrate, and which reductive domains (KR, DH, ER) are active — so it can be called independently for each module in any design:
 
-1. **Design normalization** — The tool accepts designs from either RetroTide or TridentSynth, which use different output formats. It normalizes both into a common representation: an ordered list of modules, each with its domain types and AT substrate annotation.
+1. **Per-module search** — Given a module's properties (loading status, AT substrate specificity, active reductive domains), the tool queries ClusterCAD's domain index for natural modules with matching characteristics. This approach works with designs from any upstream tool without requiring format-specific normalization.
 
-2. **Module-by-module search** — For each module in the design, the tool queries ClusterCAD's domain index for natural modules with matching characteristics:
-   - AT substrate specificity (e.g., methylmalonyl-CoA)
-   - Presence of required reductive domains (KR, DH, ER)
-   - Loading module status (starter modules use different domain architectures)
+2. **Amino acid sequence retrieval** — For each matching natural module, the tool fetches the amino acid sequence of every domain from ClusterCAD's API. These sequences are the starting point for gene synthesis or domain swapping constructs.
 
-3. **Amino acid sequence retrieval** — For each matching natural module, the tool fetches the amino acid sequence of every domain from ClusterCAD's API. These sequences are the starting point for gene synthesis or domain swapping constructs.
-
-4. **Result assembly** — The output provides, for each design module, a ranked list of natural module matches with their source cluster, subunit, and per-domain amino acid sequences. This gives the engineer multiple options for each position in the chimeric PKS, enabling selection based on factors like phylogenetic compatibility or expression host preferences.
+3. **Result assembly** — The output provides a ranked list of natural module matches with their source cluster, subunit, and per-domain amino acid sequences. This gives the engineer multiple options for each position in the chimeric PKS, enabling selection based on factors like phylogenetic compatibility or expression host preferences.
 
 This step connects computational design to physical DNA construction, closing the gap between in silico pathway prediction and wet-lab implementation.
 
