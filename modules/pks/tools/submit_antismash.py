@@ -4,11 +4,12 @@ import requests
 class SubmitAntiSmash:
     """
     Description:
-        Submits a DNA sequence or GenBank file to the public antiSMASH server for PKS analysis.
-    Input:
-        seq (str): Raw DNA sequence string to analyze. Must be at least 1000 bp.
-        filepath (str): Path to a GenBank (.gb) file to upload directly. When provided,
-                        seq is ignored and the CDS annotations are used as-is (no Prodigal).
+        Submits a DNA sequence, GenBank file, or NCBI accession to the public
+        antiSMASH server for PKS domain analysis. Provide exactly one of:
+          - seq: raw DNA string (≥1000 bp)
+          - filepath: path to a .gb GenBank file
+          - ncbi: an NCBI nucleotide accession (e.g. NC_003888, NZ_CP029033)
+        Active Site Finder and KnownClusterBlast are always enabled.
     Output:
         str: A status message containing the Job ID.
     """
@@ -16,8 +17,15 @@ class SubmitAntiSmash:
     def initiate(self) -> None:
         self.api_url = "https://antismash.secondarymetabolites.org/api/v1.0/submit"
 
-    def run(self, seq: str = "", filepath: str = "") -> str:
-        """Submit a sequence or GenBank file to antiSMASH and return the Job ID."""
+    def run(self, seq: str = "", filepath: str = "", ncbi: str = "") -> str:
+        """Submit to antiSMASH and return the Job ID."""
+
+        # Validate — exactly one input must be provided
+        provided = sum(bool(x) for x in (seq, filepath, ncbi))
+        if provided == 0:
+            raise ValueError("Provide one of: seq (DNA string), filepath (GenBank path), or ncbi (accession).")
+        if provided > 1:
+            raise ValueError("Provide only one of seq, filepath, or ncbi — not multiple.")
 
         payload = {
             "email": "opshoryc@berkeley.edu",
@@ -25,9 +33,18 @@ class SubmitAntiSmash:
             "knownclusterblast": "true",
         }
 
-        if filepath:
-            # Upload a GenBank file directly — antiSMASH uses existing CDS annotations,
-            # no gene prediction needed.
+        if ncbi:
+            # Let antiSMASH fetch the record directly from NCBI.
+            # NCBI records already have CDS annotations — no gene finder needed.
+            payload["ncbi"] = ncbi.strip()
+            try:
+                response = requests.post(self.api_url, data=payload)
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                raise ValueError(f"Failed to reach antiSMASH API: {e}")
+
+        elif filepath:
+            # Upload a GenBank file — uses existing CDS annotations, no Prodigal.
             ext = os.path.splitext(filepath)[1].lower()
             if ext not in (".gb", ".gbk", ".genbank"):
                 raise ValueError(f"filepath must be a GenBank file (.gb/.gbk), got: {ext}")
@@ -36,26 +53,28 @@ class SubmitAntiSmash:
             with open(filepath, "rb") as f:
                 fname = os.path.basename(filepath)
                 files = {"seq": (fname, f.read())}
+            try:
+                response = requests.post(self.api_url, data=payload, files=files)
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                raise ValueError(f"Failed to reach antiSMASH API: {e}")
+
         else:
             # Submit raw DNA as FASTA — use Prodigal for gene prediction.
-            if not seq:
-                raise ValueError("Provide either seq (DNA string) or filepath (GenBank path).")
             if len(seq) < 1000:
                 raise ValueError(
                     f"Sequence is too short ({len(seq)} bp). antiSMASH requires a minimum of 1000 bp."
                 )
             payload["genefinder"] = "prodigal"
             files = {"seq": ("user_pks.fasta", f">user_synthetic_pks\n{seq}\n")}
-
-        try:
-            response = requests.post(self.api_url, data=payload, files=files)
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            raise ValueError(f"Failed to reach antiSMASH API: {e}")
+            try:
+                response = requests.post(self.api_url, data=payload, files=files)
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                raise ValueError(f"Failed to reach antiSMASH API: {e}")
 
         result = response.json()
         job_id = result.get("id")
-
         if not job_id:
             raise ValueError(f"API did not return a Job ID. Full response: {result}")
 

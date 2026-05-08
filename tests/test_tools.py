@@ -70,7 +70,7 @@ def test_reverse_translate_invalid_aa_raises():
 
 
 def test_submit_antismash_empty_seq_raises():
-    with pytest.raises(ValueError, match="Provide either"):
+    with pytest.raises(ValueError, match="Provide one of"):
         submit_antismash()
 
 
@@ -87,6 +87,16 @@ def test_submit_antismash_filepath_missing_raises():
 def test_submit_antismash_filepath_wrong_extension_raises():
     with pytest.raises(ValueError, match="GenBank"):
         submit_antismash(filepath="modules/pks/data/test_output.fasta")
+
+
+def test_submit_antismash_multiple_inputs_raises():
+    with pytest.raises(ValueError, match="only one"):
+        submit_antismash(seq="ATGAAATAA", ncbi="NC_003888")
+
+
+def test_submit_antismash_multiple_inputs_filepath_ncbi_raises():
+    with pytest.raises(ValueError, match="only one"):
+        submit_antismash(filepath="modules/pks/data/test_output.gb", ncbi="NC_003888")
 
 
 # ── check_antismash tests (no network) ──────────────────────────────
