@@ -1,9 +1,9 @@
 {
   "id": "org.bioe234.function.pks.submit_antismash.v1",
   "name": "Submit to antiSMASH",
-  "description": "Submits a DNA sequence to the public antiSMASH API to analyze polyketide synthase (PKS) domains.",
+  "description": "Submits a DNA sequence or GenBank file to the public antiSMASH API for PKS domain analysis. Provide either seq (raw DNA string) or filepath (path to a .gb file from reverse_translate). Active Site Finder and KnownClusterBlast are always enabled.",
   "type": "function",
-  "keywords": ["antismash", "submit", "PKS", "validation"],
+  "keywords": ["antismash", "submit", "PKS", "validation", "genbank"],
   "date_created": null,
   "date_last_modified": null,
 
@@ -11,21 +11,30 @@
     {
       "name": "seq",
       "type": "string",
-      "description": "The synthetic DNA sequence to analyze. Can be a raw string or resource name."
+      "description": "Raw DNA sequence string to analyze (minimum 1000 bp). Prodigal is used for gene prediction. Provide either seq or filepath, not both."
+    },
+    {
+      "name": "filepath",
+      "type": "string",
+      "description": "Path to a GenBank (.gb) file to upload directly (e.g. from reverse_translate's file_saved_at field). Preferred over seq — uses CDS annotations directly, skipping Prodigal for more accurate domain calls."
     }
   ],
 
   "outputs": [
     {
       "type": "string",
-      "description": "A message containing the antiSMASH job ID to be used for checking status."
+      "description": "A message containing the antiSMASH job ID to be passed to check_antismash."
     }
   ],
 
   "examples": [
     {
-      "input":  { "seq": "ATGCGT..." },
-      "output": { "result": "Job successfully submitted! The Job ID is: test-job-123..." }
+      "input":  { "seq": "ATGAAACGT..." },
+      "output": { "result": "Job successfully submitted! The Job ID is: bacteria-xxxxxxxx-..." }
+    },
+    {
+      "input":  { "filepath": "modules/pks/data/synthetic_pks.gb" },
+      "output": { "result": "Job successfully submitted! The Job ID is: bacteria-xxxxxxxx-..." }
     }
   ],
 
@@ -36,7 +45,6 @@
     "execution": "run",
     "disposal": null,
 
-    "mcp_name": "submit_antismash",
-    "seq_params": ["seq"]
+    "mcp_name": "submit_antismash"
   }
 }

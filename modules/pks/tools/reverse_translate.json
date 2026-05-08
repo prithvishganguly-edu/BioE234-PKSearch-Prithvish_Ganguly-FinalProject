@@ -1,9 +1,9 @@
 {
   "id": "org.bioe234.function.pks.reverse_translate.v1",
   "name": "Reverse Translate AA to DNA",
-  "description": "Converts an amino acid sequence into a codon-optimized DNA sequence for a target host and saves it as a GenBank file.",
+  "description": "Converts an amino acid sequence into a codon-optimized DNA sequence for a target host organism and saves it as a GenBank file with a proper CDS annotation. A warning is included if the output is under 1000 bp (antiSMASH minimum).",
   "type": "function",
-  "keywords": ["translation", "reverse translate", "codon optimization", "DNA", "genbank"],
+  "keywords": ["translation", "reverse translate", "codon optimization", "DNA", "genbank", "CDS"],
   "date_created": null,
   "date_last_modified": null,
 
@@ -11,31 +11,48 @@
     {
       "name": "aa_sequence",
       "type": "string",
-      "description": "The raw amino acid sequence to be converted."
+      "description": "Amino acid sequence in single-letter code (e.g. 'MKVLSAFG')."
     },
     {
       "name": "host",
       "type": "string",
-      "description": "The target organism for codon optimization (e.g., 'e_coli', 's_albus'). Defaults to 'e_coli'."
+      "description": "Target organism for codon optimization. Supported: e_coli, s_coelicolor, s_albus, s_venezuelae, p_putida, s_cerevisiae. Defaults to e_coli."
     },
     {
       "name": "filename",
       "type": "string",
-      "description": "The desired name for the output GenBank file. Must end in .gb."
+      "description": "Output GenBank filename (must end in .gb). Saved to modules/pks/data/. Defaults to synthetic_pks.gb."
     }
   ],
 
   "outputs": [
     {
       "type": "object",
-      "description": "A dictionary containing the optimized DNA string and the file path where the GenBank file was saved."
+      "description": "Dictionary with: status ('success'), dna_sequence (optimized DNA string), dna_length_bp (integer), file_saved_at (path to the GenBank file), message (summary string), and optionally warning (if dna_length_bp < 1000)."
     }
   ],
 
   "examples": [
     {
+      "input":  { "aa_sequence": "MKVL", "host": "s_coelicolor", "filename": "module1.gb" },
+      "output": {
+        "status": "success",
+        "dna_sequence": "ATGAAGGTGCTG",
+        "dna_length_bp": 12,
+        "file_saved_at": "modules/pks/data/module1.gb",
+        "message": "Sequence optimized for s_coelicolor and saved to module1.gb.",
+        "warning": "Output is only 12 bp. antiSMASH requires a minimum of 1000 bp..."
+      }
+    },
+    {
       "input":  { "aa_sequence": "MYQ", "host": "e_coli", "filename": "test.gb" },
-      "output": { "status": "success", "file_saved_at": "modules/pks/data/test.gb" }
+      "output": {
+        "status": "success",
+        "dna_sequence": "ATGTACCAG",
+        "dna_length_bp": 9,
+        "file_saved_at": "modules/pks/data/test.gb",
+        "message": "Sequence optimized for e_coli and saved to test.gb."
+      }
     }
   ],
 
