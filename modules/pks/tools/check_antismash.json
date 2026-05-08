@@ -1,9 +1,9 @@
 {
   "id": "org.bioe234.function.pks.check_antismash.v1",
   "name": "Check antiSMASH Results",
-  "description": "Polls the antiSMASH API to check job status and extracts polyketide synthase (PKS) domain architectures if completed.",
+  "description": "Polls the antiSMASH API for job status and, when complete, returns PKS domain predictions (AT substrate, KR stereochemistry), predicted polymer SMILES, and BGC region hits. Use wait=True to poll automatically until done.",
   "type": "function",
-  "keywords": ["antismash", "check", "status", "results", "PKS"],
+  "keywords": ["antismash", "check", "status", "results", "PKS", "domain", "validation"],
   "date_created": null,
   "date_last_modified": null,
 
@@ -11,21 +11,51 @@
     {
       "name": "job_id",
       "type": "string",
-      "description": "The Job ID string provided by submit_antismash."
+      "description": "The Job ID returned by submit_antismash (format: bacteria-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
+    },
+    {
+      "name": "wait",
+      "type": "boolean",
+      "description": "If true, polls every 15 seconds until the job completes or timeout_seconds is reached. Default false."
+    },
+    {
+      "name": "timeout_seconds",
+      "type": "integer",
+      "description": "Maximum seconds to wait when wait=true. Default 300 (5 minutes)."
     }
   ],
 
   "outputs": [
     {
       "type": "object",
-      "description": "A dictionary containing job status, visualization URL, and detailed PKS module structures."
+      "description": "Dictionary with: status, visualization_url, domain_predictions (AT_substrate, AT_substrate_code, AT_confidence, KR_stereochemistry, KR_activity per domain), predicted_polymer (polymer name and SMILES), and pks_clusters (BGC region hits, populated only for constructs >=10 kb)."
     }
   ],
 
   "examples": [
     {
-      "input":  { "job_id": "example-job-123" },
-      "output": { "status": "running", "message": "The job is still processing." }
+      "input":  { "job_id": "bacteria-1abc9db1-4f2e-4ab3-a5dd-21210cb2f4b8", "wait": true },
+      "output": {
+        "status": "completed",
+        "visualization_url": "https://antismash.secondarymetabolites.org/upload/bacteria-1abc9db1-.../index.html",
+        "domain_predictions": {
+          "nrpspksdomains_ctg1_1_PKS_AT.1": {
+            "AT_substrate": "Methylmalonyl-CoA",
+            "AT_substrate_code": "mmal",
+            "AT_confidence": 100.0
+          },
+          "nrpspksdomains_ctg1_1_PKS_KR.1": {
+            "KR_stereochemistry": "B2",
+            "KR_activity": "active"
+          }
+        },
+        "predicted_polymer": { "polymer": "(Me-ohmal)", "smiles": "C(C)C(O)C(=O)O" },
+        "pks_clusters": []
+      }
+    },
+    {
+      "input":  { "job_id": "bacteria-1abc9db1-4f2e-4ab3-a5dd-21210cb2f4b8", "wait": false },
+      "output": { "status": "queued", "message": "Job is still processing. Try again in 1-2 minutes." }
     }
   ],
 

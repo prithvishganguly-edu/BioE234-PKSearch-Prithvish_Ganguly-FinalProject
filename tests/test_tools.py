@@ -7,19 +7,100 @@ module-level alias  (for example: `reverse_complement = _instance.run`)  so that
 direct imports continue to work for students who prefer that style.
 """
 
+import os
 import pytest
 from modules.pks.tools.reverse_translate import reverse_translate
+from modules.pks.tools.submit_antismash import submit_antismash
+from modules.pks.tools.check_antismash import check_antismash
 from modules.pks.tools.assess_pks_feasibility import assess_pks_feasibility
 from modules.pks.tools.resolve_smiles import resolve_smiles
 from modules.pks.tools.retrotide_designer import retrotide_designer
+from modules.pks.tools.match_design_to_parts import match_design_to_parts
+
+
+# ── reverse_translate tests ──────────────────────────────────────────
 
 
 def test_reverse_translate():
-    """Unit test to ensure the bridge successfully outputs DNA."""
     result = reverse_translate("MKV", host="e_coli", filename="test_output.gb")
     assert result["status"] == "success"
     assert "dna_sequence" in result
     assert result["dna_sequence"].startswith("ATG")
+
+
+def test_reverse_translate_includes_length():
+    result = reverse_translate("MKV", host="e_coli", filename="test_output.gb")
+    assert "dna_length_bp" in result
+    assert result["dna_length_bp"] == len(result["dna_sequence"])
+
+
+def test_reverse_translate_short_sequence_warns():
+    result = reverse_translate("MK", host="e_coli", filename="test_output.gb")
+    assert "warning" in result
+    assert "1000" in result["warning"]
+
+
+def test_reverse_translate_long_sequence_no_warning():
+    # 334 aa × 3 = 1002 bp — just over the threshold
+    long_aa = "MKVLSAFG" * 42
+    result = reverse_translate(long_aa, host="e_coli", filename="test_output.gb")
+    assert "warning" not in result
+
+
+def test_reverse_translate_genbank_has_cds():
+    from Bio import SeqIO
+    result = reverse_translate("MKVL", host="e_coli", filename="test_output.gb")
+    rec = SeqIO.read(result["file_saved_at"], "genbank")
+    cds_features = [f for f in rec.features if f.type == "CDS"]
+    assert len(cds_features) == 1
+    assert "translation" in cds_features[0].qualifiers
+
+
+def test_reverse_translate_empty_raises():
+    with pytest.raises(ValueError):
+        reverse_translate("", host="e_coli")
+
+
+def test_reverse_translate_invalid_aa_raises():
+    with pytest.raises(ValueError):
+        reverse_translate("MKV!XZ", host="e_coli")
+
+
+# ── submit_antismash tests (no network) ──────────────────────────────
+
+
+def test_submit_antismash_empty_seq_raises():
+    with pytest.raises(ValueError, match="Provide either"):
+        submit_antismash()
+
+
+def test_submit_antismash_short_seq_raises():
+    with pytest.raises(ValueError, match="1000 bp"):
+        submit_antismash(seq="ATGAAATAA")
+
+
+def test_submit_antismash_filepath_missing_raises():
+    with pytest.raises(ValueError, match="File not found"):
+        submit_antismash(filepath="nonexistent_file.gb")
+
+
+def test_submit_antismash_filepath_wrong_extension_raises():
+    with pytest.raises(ValueError, match="GenBank"):
+        submit_antismash(filepath="modules/pks/data/test_output.fasta")
+
+
+# ── check_antismash tests (no network) ──────────────────────────────
+
+
+def test_check_antismash_empty_job_id_raises():
+    with pytest.raises(ValueError, match="cannot be empty"):
+        check_antismash("")
+
+
+@pytest.mark.network
+def test_check_antismash_unknown_job_id_raises():
+    with pytest.raises(ValueError, match="Failed to check status"):
+        check_antismash("bacteria-00000000-0000-0000-0000-000000000000")
 
 
 """
@@ -186,3 +267,62 @@ def test_retrotide_functional_output():
     for mod in design["modules"]:
         assert "loading" in mod
         assert "domains" in mod
+
+
+# ── match_design_to_parts tests ─────────────────────────────────────
+
+
+def test_match_design_invalid_source():
+    design = {"modules": [{"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}}]}
+    with pytest.raises(ValueError, match="source must be"):
+        match_design_to_parts(design, source="invalid")
+
+
+def test_match_design_empty_design():
+    with pytest.raises(ValueError):
+        match_design_to_parts({}, source="retrotide")
+
+
+def test_match_design_none_design():
+    with pytest.raises(ValueError):
+        match_design_to_parts(None, source="retrotide")
+
+
+def test_match_design_retrotide_no_modules():
+    with pytest.raises(ValueError, match="no 'modules'"):
+        match_design_to_parts({"rank": 1}, source="retrotide")
+
+
+def test_match_design_tridentsynth_no_modules():
+    with pytest.raises(ValueError, match="no 'pks_modules'"):
+        match_design_to_parts({"ok": True}, source="tridentsynth")
+
+
+def test_match_design_invalid_max_matches():
+    design = {"modules": [{"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}}]}
+    with pytest.raises(ValueError, match="max_matches_per_module"):
+        match_design_to_parts(design, source="retrotide", max_matches_per_module=0)
+
+
+@pytest.mark.slow
+def test_match_design_retrotide_functional():
+    design = {
+        "rank": 1,
+        "similarity": 0.5,
+        "product_smiles": "CCCC(=O)O",
+        "modules": [
+            {"loading": True, "domains": {"AT": {"substrate": "Malonyl-CoA"}}},
+        ],
+        "exact_match": False,
+    }
+    result = match_design_to_parts(design, source="retrotide", max_matches_per_module=1)
+    assert result["source"] == "retrotide"
+    assert result["total_modules"] == 1
+    assert "module_matches" in result
+    assert "warnings" in result
+    assert len(result["module_matches"]) == 1
+    match = result["module_matches"][0]
+    assert match["module_index"] == 0
+    assert match["loading"] is True
+    assert "design_domains" in match
+    assert "natural_matches" in match

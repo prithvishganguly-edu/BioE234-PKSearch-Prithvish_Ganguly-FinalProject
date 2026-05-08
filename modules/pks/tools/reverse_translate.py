@@ -76,6 +76,7 @@ class ReverseTranslate:
         optimized_dna = problem.sequence
         
         # 3. Create GenBank Record with BioPython
+        protein_seq = str(Seq(optimized_dna).translate(to_stop=True))
         record = SeqRecord(
             Seq(optimized_dna),
             id="SYNTH_PKS",
@@ -83,24 +84,38 @@ class ReverseTranslate:
             description=f"Codon optimized for {actual_host_used} using DnaChisel",
             annotations={"molecule_type": "DNA"}
         )
-        
-        full_feature = SeqFeature(
-            FeatureLocation(0, len(optimized_dna)), 
-            type="misc_feature", 
-            qualifiers={"label": "Optimized PKS Sequence"}
+
+        cds_feature = SeqFeature(
+            FeatureLocation(0, len(optimized_dna)),
+            type="CDS",
+            qualifiers={
+                "label": "Optimized PKS Sequence",
+                "product": "synthetic PKS module",
+                "transl_table": "11",
+                "codon_start": "1",
+                "translation": protein_seq,
+            }
         )
-        record.features.append(full_feature)
+        record.features.append(cds_feature)
         
         # 4. Save the file
         file_path = os.path.join(self.data_dir, filename)
         SeqIO.write(record, file_path, "genbank")
         
-        return {
+        result = {
             "status": "success",
             "dna_sequence": optimized_dna,
+            "dna_length_bp": len(optimized_dna),
             "file_saved_at": file_path,
-            "message": f"Sequence optimized for {actual_host_used} and saved to {filename}."
+            "message": f"Sequence optimized for {actual_host_used} and saved to {filename}.",
         }
+        if len(optimized_dna) < 1000:
+            result["warning"] = (
+                f"Output is only {len(optimized_dna)} bp. antiSMASH requires a minimum of "
+                "1000 bp — this sequence will be rejected if submitted directly. "
+                "Consider adding flanking sequence or submitting as part of a larger construct."
+            )
+        return result
 
 _instance = ReverseTranslate()
 _instance.initiate()

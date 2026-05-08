@@ -72,10 +72,21 @@ If an unrecognized host is provided, falls back to *E. coli* and notifies the us
 {
   "status": "success",
   "dna_sequence": "ATGGTCGCC...",
+  "dna_length_bp": 4356,
   "file_saved_at": "modules/pks/data/synthetic_pks.gb",
   "message": "Sequence optimized for s_coelicolor and saved to synthetic_pks.gb."
 }
 ```
+
+If the output is under 1000 bp a `warning` key is added:
+
+```json
+{
+  "warning": "Output is only 9 bp. antiSMASH requires a minimum of 1000 bp — this sequence will be rejected if submitted directly."
+}
+```
+
+The GenBank file includes a proper `CDS` feature with an embedded `translation` qualifier, so antiSMASH can use the annotation directly without running Prodigal.
 
 ### Example usage
 
@@ -97,9 +108,12 @@ The sequence is wrapped in FASTA format and uploaded to the antiSMASH v1.0 REST 
 
 ### Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `seq` | string | Raw DNA sequence string to analyze |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `seq` | string | `""` | Raw DNA sequence string to analyze (minimum 1000 bp) |
+| `filepath` | string | `""` | Path to a GenBank `.gb` file to upload directly |
+
+Provide either `seq` or `filepath` — not both. When `filepath` is given the GenBank CDS annotations are used as-is (no Prodigal), which gives more accurate domain calls and faster results.
 
 ### Output
 
@@ -110,13 +124,14 @@ The sequence is wrapped in FASTA format and uploaded to the antiSMASH v1.0 REST 
 ### Example usage
 
 ```
-User: Submit this DNA to antiSMASH: ATGAAACGT...
-
+# Submit raw DNA
 Gemini calls: submit_antismash(seq="ATGAAACGT...")
-→ Returns job ID, then immediately calls check_antismash
+
+# Submit GenBank file directly (preferred when reverse_translate output is available)
+Gemini calls: submit_antismash(filepath="modules/pks/data/synthetic_pks.gb")
 ```
 
-> **Note:** The tool accepts raw DNA strings only. NCBI accession numbers and MIBiG BGC accessions are not currently supported as direct inputs.
+> **Note:** NCBI accession numbers and MIBiG BGC accessions are not supported as inputs.
 
 ---
 
@@ -126,9 +141,11 @@ Polls the antiSMASH server for job status and, when complete, parses the results
 
 ### Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `job_id` | string | The job ID returned by `submit_antismash` |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `job_id` | string | required | The job ID returned by `submit_antismash` |
+| `wait` | bool | `False` | If `True`, polls every 15 s until the job completes or times out |
+| `timeout_seconds` | int | `300` | Max seconds to wait when `wait=True` |
 
 ### Output (job still running)
 
@@ -143,29 +160,77 @@ Polls the antiSMASH server for job status and, when complete, parses the results
 
 ```json
 {
-  "status": "done",
+  "status": "completed",
   "visualization_url": "https://antismash.secondarymetabolites.org/upload/<job_id>/index.html",
-  "pks_clusters": [ ... ]
+  "domain_predictions": {
+    "nrpspksdomains_cds0_4356_PKS_AT.1": {
+      "AT_substrate": "Methylmalonyl-CoA",
+      "AT_substrate_code": "mmal",
+      "AT_confidence": 100.0
+    },
+    "nrpspksdomains_cds0_4356_PKS_KR.1": {
+      "KR_stereochemistry": "B2",
+      "KR_activity": "active"
+    }
+  },
+  "predicted_polymer": {
+    "polymer": "(Me-ohmal)",
+    "smiles": "C(C)C(O)C(=O)O"
+  },
+  "mibig_protein_hits": [
+    {
+      "gene": "cds0_4356",
+      "protein_accession": "CAM00062.1",
+      "protein_name": "EryAI_Erythromycin_polyketide_synthase_modules_1_and_2",
+      "bgc_accession": "BGC0000055",
+      "product_type": "Polyketide:Modular type I polyketide+Saccharide:Hybrid/tailoring saccharide",
+      "similarity_pct": 100.0
+    }
+  ],
+  "pks_clusters": []
 }
 ```
 
-The `pks_clusters` array contains detected BGCs with their module/domain breakdown, AT substrate predictions (with confidence scores), KR stereochemistry calls, and predicted polymer SMILES.
+### Output fields explained
+
+| Field | Description |
+|-------|-------------|
+| `visualization_url` | Direct link to the antiSMASH results page |
+| `domain_predictions` | Per-domain annotations keyed by antiSMASH domain ID |
+| `domain_predictions[*].AT_substrate` | Human-readable extender unit name (e.g. `"Methylmalonyl-CoA"`) |
+| `domain_predictions[*].AT_substrate_code` | Raw antiSMASH code (e.g. `"mmal"`) for programmatic use |
+| `domain_predictions[*].AT_confidence` | Confidence score 0–100 |
+| `domain_predictions[*].KR_stereochemistry` | KR stereo type: A1, A2, B1, B2, C1, or C2 |
+| `domain_predictions[*].KR_activity` | `"active"` or `"inactive"` |
+| `predicted_polymer.polymer` | Shorthand name of the predicted chain extension product |
+| `predicted_polymer.smiles` | SMILES of that product |
+| `mibig_protein_hits` | Top MIBiG protein matches ranked by similarity — **always present**, even for short constructs. Each entry has `gene`, `protein_accession`, `protein_name`, `bgc_accession`, `product_type`, `similarity_pct`. |
+| `pks_clusters` | BGC region hits with cluster-level KnownClusterBlast rankings — only populated for constructs ≥10 kb |
+
+> **Note:** `domain_predictions`, `predicted_polymer`, and `mibig_protein_hits` are always returned for any construct where PKS domains are detected, even short single-module fragments. `pks_clusters` will be empty for constructs under ~10 kb.
 
 ### Example usage
 
 ```
-User: Check antiSMASH job bacteria-1abc9db1-...
-
+# One-shot check
 Gemini calls: check_antismash(job_id="bacteria-1abc9db1-4f2e-4ab3-a5dd-21210cb2f4b8")
+
+# Wait up to 5 minutes for completion automatically
+Gemini calls: check_antismash(job_id="bacteria-1abc9db1-...", wait=True, timeout_seconds=300)
 ```
 
 ### Validation workflow (AI behavior)
 
 When results come back, Gemini should:
-1. Recall the original domain architecture requested by RetroTide
-2. Cross-reference it against the domains antiSMASH detected
-3. Flag any discrepancies (missing KR, unexpected AT substrate, etc.)
-4. Provide the `visualization_url` so the user can inspect the annotated map
+1. Recall the original module architecture from RetroTide or TridentSynth
+2. Compare `domain_predictions` against what was requested:
+   - Does `AT_substrate_code` match the RetroTide extender unit (e.g. `mmal`, `mxmal`)?
+   - Does `KR_stereochemistry` match the KR type (A/B)?
+   - Are any expected domains (DH, ER) absent?
+3. Interpret `predicted_polymer` — does the SMILES match the expected chain extension for that module?
+4. Report `mibig_protein_hits` — name the top BGC match and similarity percentage; flag if unexpected or <70%
+5. Flag any mismatches explicitly
+6. Provide the `visualization_url` so the user can inspect the annotated map
 
 ---
 
@@ -184,4 +249,8 @@ pytest tests/test_tools.py -v -k "reverse_translate"
 | antiSMASH endpoint was on dead `/api/v2.0/` path | Updated to `/api/v1.0/` |
 | Submission field was `seqfile`; API expects `seq` | Corrected field name |
 | Status check compared against `"completed"`; API returns `"done"` | Added `"done"` to accepted statuses |
-| Submitted raw DNA without CDS annotation → "all records skipped" | Added ATG/TAA flanking and a proper CDS feature when submitting GenBank files |
+| `genefinder` defaulted to `none` → "all records skipped" for FASTA input | Added `genefinder: prodigal` to payload |
+| Result JSON named after uploaded file, not job ID | `check_antismash` now tries multiple candidate filenames |
+| `reverse_translate` emitted `misc_feature`; antiSMASH ignores it | Changed to `CDS` feature with embedded translation |
+| `check_antismash` only parsed BGC regions → empty output for short constructs | Now always parses `nrps_pks` domain predictions and polymer SMILES directly |
+| Sequences under 1000 bp submitted silently and failed server-side | Added client-side length check with clear error message |

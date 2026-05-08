@@ -1,0 +1,110 @@
+{
+  "id": "org.bioe234.function.pks.match_design_to_parts.v1",
+  "name": "Match PKS Design to Natural Parts",
+  "description": "Takes a PKS design from RetroTide or TridentSynth and automatically finds matching natural biological parts in ClusterCAD's database of 531 real PKS clusters. For each module in the design, searches for natural modules with matching domain profiles (AT substrate, reductive loop domains) and returns the amino acid sequences for all domains in each match. Only call this tool when the user explicitly asks for amino acid sequences or natural parts for a design.",
+  "type": "function",
+
+  "keywords": [
+    "PKS",
+    "ClusterCAD",
+    "natural parts",
+    "amino acid sequence",
+    "domain matching",
+    "RetroTide",
+    "TridentSynth",
+    "parts lookup",
+    "biological parts",
+    "module matching"
+  ],
+
+  "date_created": null,
+  "date_last_modified": null,
+
+  "inputs": [
+    {
+      "name": "design",
+      "type": "object",
+      "description": "A single PKS design object. For RetroTide: a dict with 'modules' (list of {loading, domains}). For TridentSynth: a dict containing 'pks_modules' or the full result dict."
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "description": "Which tool produced the design: 'retrotide' or 'tridentsynth'."
+    },
+    {
+      "name": "max_matches_per_module",
+      "type": "integer",
+      "description": "Maximum number of ClusterCAD matches to return per module. Default 3.",
+      "optional": true
+    }
+  ],
+
+  "outputs": [
+    {
+      "type": "object",
+      "description": "Structured result with: source (str), total_modules (int), modules_with_matches (int), module_matches (array of per-module results each containing module_index, loading, design_domains, and natural_matches with accession, cluster_name, subunit_name, subunit_id, module_label, and domains array with domain_type, domain_id, annotation, and aa_sequence), and warnings (array of strings)."
+    }
+  ],
+
+  "examples": [
+    {
+      "input": {
+        "design": {
+          "rank": 1,
+          "similarity": 0.85,
+          "product_smiles": "CCCC(=O)O",
+          "modules": [
+            {
+              "loading": true,
+              "domains": {
+                "AT": {"substrate": "Malonyl-CoA"}
+              }
+            },
+            {
+              "loading": false,
+              "domains": {
+                "AT": {"substrate": "Malonyl-CoA"},
+                "KR": {"type": "B1"}
+              }
+            }
+          ],
+          "exact_match": false
+        },
+        "source": "retrotide",
+        "max_matches_per_module": 2
+      },
+      "output": {
+        "source": "retrotide",
+        "total_modules": 2,
+        "modules_with_matches": 2,
+        "warnings": []
+      },
+      "notes": "RetroTide design with 2 modules — returns matching natural parts with AA sequences from ClusterCAD."
+    }
+  ],
+
+  "execution_details": {
+    "language": "Python",
+    "source": "modules/pks/tools/match_design_to_parts.py",
+    "initialization": "initiate",
+    "execution": "run",
+    "disposal": null,
+
+    "mcp_name": "match_design_to_parts",
+    "seq_params": []
+  },
+
+  "trigger_phrases": [
+    "find natural parts for this design",
+    "get amino acid sequences for this PKS",
+    "match this design to ClusterCAD",
+    "find real parts for retrotide design",
+    "what natural modules match this design",
+    "get AA sequences for these modules",
+    "find biological parts for this PKS design"
+  ],
+
+  "dependencies": {
+    "pip": ["requests", "beautifulsoup4"]
+  }
+}
