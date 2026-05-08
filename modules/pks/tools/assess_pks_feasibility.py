@@ -101,7 +101,7 @@ class AssessPksFeasibility:
         if 0.10 <= ratio < 0.15 or 0.50 < ratio <= 0.75:
             return self._WARN, f"O/C ratio {ratio:.2f} — atypical but possible oxygenation level."
         if num_o == 0:
-            return self._FAIL, "No oxygens — polyketides require oxygenated intermediates."
+            return self._WARN, "No oxygens — possible via fully reducing PKS (KR+DH+ER), but atypical."
         return self._FAIL, f"O/C ratio {ratio:.2f} — far outside typical polyketide range."
 
     def _check_functional_groups(self, mol) -> tuple[str, str]:

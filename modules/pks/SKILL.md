@@ -336,6 +336,24 @@ Polls the antiSMASH server for results and parses the detailed PKS domain archit
   - `timeout_seconds` (int, default `300`) — max wait time when `wait=True`
   - `expected_domains` (list of lists, optional) — expected domain order per gene, e.g. `[["KS","AT","KR","ACP"]]`. When provided, the tool returns a `validation` section with missing/unexpected domains and a match boolean.
 - **Always use `wait=True`** immediately after `submit_antismash` so the pipeline completes in one step without asking the user to call it again.
+- **How to build `expected_domains` from design tool output:**
+
+  **From RetroTide** (`pks_design_retrotide` result):
+  Each module dict has a `domains` key whose keys are the domain types. KS and ACP are always implied. Build the list as:
+  ```
+  ["KS"] + list(module["domains"].keys()) + ["ACP"]
+  ```
+  Example: `{"AT": {...}, "KR": {...}, "DH": {...}}` → `["KS", "AT", "KR", "DH", "ACP"]`
+
+  **From TridentSynth** (`tridentsynth` result):
+  `pks_modules` is a list of module dicts. Each has a `domains` list of `{"domain": "KS", "substrate": ...}` entries. Extract as:
+  ```
+  [d["domain"] for d in module["domains"]]
+  ```
+  Example: `[{"domain": "KS"}, {"domain": "AT", "substrate": "malonyl-CoA"}, {"domain": "ACP"}]` → `["KS", "AT", "ACP"]`
+
+  Pass one list per gene (one extension module = one list):
+  `expected_domains=[["KS","AT","KR","ACP"]]` for a single-module construct.
 - **Output fields:**
   - `status` — `"completed"` when done
   - `visualization_url` — direct link to the antiSMASH results page; always show this to the user
@@ -348,6 +366,16 @@ Polls the antiSMASH server for results and parses the detailed PKS domain archit
   - `mibig_protein_hits` — top MIBiG protein matches ranked by similarity; **always present**. Each entry has `gene`, `protein_accession`, `protein_name`, `bgc_accession`, `product_type`, `similarity_pct`.
   - `validation` — only present when `expected_domains` is passed; list of per-gene dicts with `expected`, `detected`, `domain_order_string`, `missing`, `unexpected`, `match`
   - `pks_clusters` — BGC region hits; only populated for constructs ≥10 kb
+
+- **Four non-obvious behaviours to know before running:**
+
+  1. **Docking domains are normal, not errors.** Natural PKS subunits from ClusterCAD include `PKS_Docking_Nterm` and `PKS_Docking_Cterm` inter-subunit linkers. antiSMASH will detect them and they will appear as `unexpected` in `validation`. This is expected — do NOT flag them as assembly errors. Only flag unexpected *catalytic* domains (KS, AT, KR, DH, ER, ACP, TE).
+
+  2. **Sequence must be long enough for reliable domain detection.** The 1000 bp minimum is antiSMASH's hard cutoff, but in practice a full module (KS-AT-KR-ACP) requires ~3000 bp for all four domains to score above the HMM detection threshold. Submitting a single isolated domain (~750 bp) will often result in partial or missing annotations even if it clears the 1000 bp gate. Always use a full subunit from ClusterCAD, not an individual domain sequence.
+
+  3. **ClusterCAD subunits contain multiple modules.** `clustercad_subunit_lookup` returns the sequence for the entire subunit (e.g., DEBS1 has loading + module 1 + module 2). antiSMASH will annotate all modules in the submitted subunit — not just the target one. When building `expected_domains`, list **all** modules in the submitted subunit in order, not just the one of interest.
+
+  4. **`expected_domains` checks domain types only — not AT substrate.** `["KS","AT","KR","ACP"]` validates that those domain types are present in the right order. It does NOT verify which extender unit the AT loads. After validation, separately check `domain_details[*].AT_substrate_code` against the AT substrate specified in the RetroTide/TridentSynth design.
 
 - **AI Actionable Steps (CRITICAL):**
   When returning results, DO NOT just list the domains back to the user. Act as a design validator:

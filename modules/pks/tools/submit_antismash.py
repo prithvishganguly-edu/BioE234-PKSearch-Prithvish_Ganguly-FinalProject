@@ -5,13 +5,20 @@ class SubmitAntiSmash:
     """
     Description:
         Submits a DNA sequence, GenBank file, or NCBI accession to the public
-        antiSMASH server for PKS domain analysis. Provide exactly one of:
-          - seq: raw DNA string (≥1000 bp)
-          - filepath: path to a .gb GenBank file
-          - ncbi: an NCBI nucleotide accession (e.g. NC_003888, NZ_CP029033)
-        Active Site Finder and KnownClusterBlast are always enabled.
+        antiSMASH server for PKS domain analysis. Provide exactly one of the
+        three input parameters. Active Site Finder and KnownClusterBlast are
+        always enabled.
+    Input:
+        seq (str): Raw DNA sequence string (≥1000 bp). Prodigal used for gene
+                   prediction. Mutually exclusive with filepath and ncbi.
+        filepath (str): Path to a GenBank (.gb) file. Uses existing CDS
+                        annotations directly — no Prodigal. Preferred for
+                        in-silico designs from reverse_translate.
+        ncbi (str): NCBI nucleotide accession (e.g. 'AM420293', 'NC_003888').
+                    antiSMASH fetches the record server-side. Best for
+                    sequenced clones deposited on NCBI.
     Output:
-        str: A status message containing the Job ID.
+        str: A status message containing the Job ID for use with check_antismash.
     """
 
     def initiate(self) -> None:
