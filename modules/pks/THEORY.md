@@ -309,30 +309,7 @@ This automated comparison replaces the manual inspection of antiSMASH HTML outpu
 
 ---
 
-## 14. ClusterCAD Database Tools (`clustercad_*`) — Dennj Moser
-
-### What is ClusterCAD?
-
-ClusterCAD is a curated database of 531 experimentally characterized Type I modular PKS clusters, each with full domain annotations, substrate specificities, subunit sequences, and predicted biosynthetic intermediates. It is maintained by the Joint BioEnergy Institute (JBEI) and provides a ground-truth reference for PKS domain architectures derived from real organisms.
-
-### Role in the Pipeline
-
-The ClusterCAD tools serve as a **parts database** for PKS engineering. Once RetroTide or TridentSynth proposes an abstract domain architecture for a target molecule, the ClusterCAD tools find real, experimentally validated biological parts that implement each proposed module. This closes the gap between computational design and physical DNA construction.
-
-Thoughts
-Copy thoughts to clipboard
-
-
-
-Here are the exact additions to make to both files:
-
-Addition to theory.md
-Add this as a new Section 11 before the References:
-
-markdown
-
-Copy code
-## 11. ClusterCAD Database Tools (`clustercad_*`) — Dennj Moser
+## 14. ClusterCAD Database Tools (`clustercad_*`) - Dennis Wu
 
 ### What is ClusterCAD?
 
