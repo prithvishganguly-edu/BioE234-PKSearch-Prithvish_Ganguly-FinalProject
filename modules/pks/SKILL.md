@@ -336,6 +336,24 @@ Polls the antiSMASH server for results and parses the detailed PKS domain archit
   - `timeout_seconds` (int, default `300`) — max wait time when `wait=True`
   - `expected_domains` (list of lists, optional) — expected domain order per gene, e.g. `[["KS","AT","KR","ACP"]]`. When provided, the tool returns a `validation` section with missing/unexpected domains and a match boolean.
 - **Always use `wait=True`** immediately after `submit_antismash` so the pipeline completes in one step without asking the user to call it again.
+- **How to build `expected_domains` from design tool output:**
+
+  **From RetroTide** (`pks_design_retrotide` result):
+  Each module dict has a `domains` key whose keys are the domain types. KS and ACP are always implied. Build the list as:
+  ```
+  ["KS"] + list(module["domains"].keys()) + ["ACP"]
+  ```
+  Example: `{"AT": {...}, "KR": {...}, "DH": {...}}` → `["KS", "AT", "KR", "DH", "ACP"]`
+
+  **From TridentSynth** (`tridentsynth` result):
+  `pks_modules` is a list of module dicts. Each has a `domains` list of `{"domain": "KS", "substrate": ...}` entries. Extract as:
+  ```
+  [d["domain"] for d in module["domains"]]
+  ```
+  Example: `[{"domain": "KS"}, {"domain": "AT", "substrate": "malonyl-CoA"}, {"domain": "ACP"}]` → `["KS", "AT", "ACP"]`
+
+  Pass one list per gene (one extension module = one list):
+  `expected_domains=[["KS","AT","KR","ACP"]]` for a single-module construct.
 - **Output fields:**
   - `status` — `"completed"` when done
   - `visualization_url` — direct link to the antiSMASH results page; always show this to the user
