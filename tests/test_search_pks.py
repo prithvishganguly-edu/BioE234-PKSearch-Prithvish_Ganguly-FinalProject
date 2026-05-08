@@ -733,7 +733,32 @@ def _servers_reachable() -> bool:
         return False
 
 
-@pytest.mark.skipif(not _servers_reachable(), reason="SBSPKS server not reachable")
+def _cache_exists() -> bool:
+    """Return True only if the combined index cache is built and has sufficient entries."""
+    import json as _json
+    cache = os.path.join(
+        os.path.dirname(__file__),
+        "..", "modules", "pks", "data", "combined_index.json",
+    )
+    if not os.path.exists(cache) or os.path.getsize(cache) < 100_000:
+        return False
+    try:
+        with open(cache) as f:
+            data = _json.load(f)
+        # Need at least 1000 entries and at least one sbspks intermediate
+        has_intermediates = any(
+            e.get("source") == "sbspks" and e.get("is_intermediate")
+            for e in data[:500]
+        )
+        return len(data) >= 1000 and has_intermediates
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(
+    not _cache_exists(),
+    reason="Combined index cache not built — run initiate() first to build it",
+)
 class TestLiveIntegration:
     def test_pikromycin_live_search_returns_correct_schema(self):
         """
