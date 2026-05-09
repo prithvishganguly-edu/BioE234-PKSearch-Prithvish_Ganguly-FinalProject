@@ -388,6 +388,96 @@ This approach is grounded in the same principle as SBSPKS intermediate search (S
 
 ---
 
+## 15. Live TridentSynth Pathway Search (`tridentsynth`) — Shalen Ardeshna
+
+### What TridentSynth Adds to the Pipeline
+
+`tridentsynth` connects the MCP pipeline to the live TridentSynth web server. While tools like `retrotide_designer` generate abstract PKS module designs and `search_pks` searches known natural products/intermediates, TridentSynth searches for pathways that combine:
+
+1. **PKS assembly**
+2. **Biological tailoring**
+3. **Chemical tailoring**
+
+This is useful because many target molecules are not direct PKS products. A PKS may produce a close intermediate that must then be converted to the target through one biological or chemical step.
+
+### Live Job Submission
+
+The tool accepts a target SMILES string and builds a TridentSynth-compatible form payload using the same field names as the website:
+
+```text
+smiles
+synthesisStrategy_pks
+synthesisStrategy_bio
+synthesisStrategy_chem
+rangebio
+rangechem
+releaseMechanism
+pksStarters[]
+pksExtenders[]
+maxAtomsC
+maxAtomsN
+maxAtomsO
+```
+
+The main user-controlled parameters are whether to use PKS, Bio, and/or Chem synthesis; the maximum number of Bio/Chem steps; the PKS release mechanism; and the PKS starter/extender substrates. If optional values are not provided, the tool auto-fills a compact exploratory setup using one Bio step, one Chem step, and common malonyl/methylmalonyl starter and extender units.
+
+### Result Polling and Parsing
+
+After submission, TridentSynth returns a task ID. The tool polls:
+
+```text
+/run_TridentSynth/results/<task_id>/
+```
+
+until the result page is complete or the timeout is reached.
+
+The parser extracts the first/best pathway block and returns:
+
+- synthesis parameters
+- PKS modules
+- PKS product SMILES
+- post-PKS product SMILES
+- reaction SMILES
+- reaction rule names
+- reaction enthalpy
+- similarity scores
+- pathway structure SMILES
+
+Only the first/best pathway block is used so that alternate candidate pathways do not get mixed into the main result.
+
+### Preventing SMILES Misinterpretation
+
+A TridentSynth result page can contain several related molecules: the submitted target, the PKS product, final post-PKS product, byproducts, and alternate pathway products. These can be easy for Gemini to confuse if it reads the raw JSON directly.
+
+To avoid this, the tool explicitly assigns each output field from a specific result-page section. It also creates a deterministic `text_summary` that Gemini can display directly. This prevents common errors such as reporting an intermediate as the target, showing Bio steps when Bio was not selected, or repeating the same pathway information multiple times.
+
+### Example: Hexane Pathway
+
+For hexane:
+
+```text
+CCCCCC
+```
+
+TridentSynth may predict a PKS-generated carboxylic acid intermediate followed by chemical decarboxylation:
+
+```text
+CCCCCCC(=O)O>>CCCCCC.O=C=O
+```
+
+This means the PKS creates a carboxylic acid precursor, the chemical step removes carbon dioxide, and the final product is hexane. The final product can therefore match the target even when the direct PKS product only partially matches it.
+
+### Limitations
+
+- The tool depends on the live TridentSynth website being available.
+- Runtime depends on TridentSynth server speed.
+- Complex targets may take longer or time out.
+- If the TridentSynth page layout changes, the parser may need to be updated.
+- TridentSynth pathways are computational predictions and still require manual review and experimental validation.
+- Post-PKS chemical transformations may not be directly biologically implementable without additional engineering.
+
+---
+
 ## References
 
 - Keatinge-Clay, A.T. (2012). The structures of type I polyketide synthases. *Natural Product Reports*, 29, 1050.
