@@ -824,12 +824,22 @@ class SearchPKS:
                 })
                 continue
 
-            # SBSPKS hits — fetch pathway steps
+            # SBSPKS hits — fetch pathway steps with a 3s timeout so we
+            # never block Gemini for more than a few seconds per hit.
             pathway_steps: list[str] = []
             path_key = entry.get("path_key", "")
             if path_key:
-                pathway_data = self._fetch_pathway_data(path_key, run_warnings)
-                pathway_steps = pathway_data.get("all_steps", [])
+                try:
+                    url = f"{_BASE_URL}/make_reaction.cgi?path={path_key}"
+                    resp = self._session.get(url, timeout=3)
+                    resp.raise_for_status()
+                    raw_labels = re.findall(r"label:\s*'([^']+)'", resp.text)
+                    for raw in raw_labels:
+                        label = raw.replace("\\n", " ").replace("\n", " ").strip()
+                        if label:
+                            pathway_steps.append(label)
+                except Exception:
+                    pathway_steps = []
 
             entry_with_steps = {**entry, "pathway_steps": pathway_steps}
             results.append({
