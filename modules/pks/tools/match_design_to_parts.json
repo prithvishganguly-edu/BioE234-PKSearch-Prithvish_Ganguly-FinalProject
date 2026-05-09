@@ -1,20 +1,18 @@
 {
-  "id": "org.bioe234.function.pks.match_design_to_parts.v1",
-  "name": "Match PKS Design to Natural Parts",
-  "description": "Takes a PKS design from RetroTide or TridentSynth and automatically finds matching natural biological parts in ClusterCAD's database of 531 real PKS clusters. For each module in the design, searches for natural modules with matching domain profiles (AT substrate, reductive loop domains) and returns the amino acid sequences for all domains in each match. Only call this tool when the user explicitly asks for amino acid sequences or natural parts for a design.",
+  "id": "org.bioe234.function.pks.find_pks_module_parts.v1",
+  "name": "Find Matching PKS Module Parts in ClusterCAD",
+  "description": "Finds matching natural PKS modules in the ClusterCAD database for a single module with specified domain properties. Call this once per module in a design. Accepts simple scalar inputs (loading status, AT substrate, reduction domains present) and returns cluster matches with amino acid sequences for all domains.",
   "type": "function",
 
   "keywords": [
     "PKS",
     "ClusterCAD",
-    "natural parts",
+    "module matching",
     "amino acid sequence",
-    "domain matching",
-    "RetroTide",
-    "TridentSynth",
-    "parts lookup",
-    "biological parts",
-    "module matching"
+    "natural parts",
+    "AT substrate",
+    "reductive domains",
+    "domain search"
   ],
 
   "date_created": null,
@@ -22,19 +20,26 @@
 
   "inputs": [
     {
-      "name": "design",
-      "type": "object",
-      "description": "A single PKS design object. For RetroTide: a dict with 'modules' (list of {loading, domains}). For TridentSynth: a dict containing 'pks_modules' or the full result dict."
+      "name": "loading",
+      "type": "boolean",
+      "description": "Is this a loading/starter module? true for the first module in a PKS, false for extension modules."
     },
     {
-      "name": "source",
+      "name": "at_substrate",
       "type": "string",
-      "description": "Which tool produced the design: 'retrotide' or 'tridentsynth'."
+      "description": "AT substrate name, e.g. 'Malonyl-CoA', 'Methylmalonyl-CoA'. Leave empty if unspecified.",
+      "optional": true
     },
     {
-      "name": "max_matches_per_module",
+      "name": "reductive_domains",
+      "type": "string",
+      "description": "Comma-separated list of active reduction domains present in this module, e.g. 'KR,DH,ER' or 'KR' or ''. Only 'KR', 'DH', 'ER' are recognized. Leave empty if no reductive domains.",
+      "optional": true
+    },
+    {
+      "name": "max_matches",
       "type": "integer",
-      "description": "Maximum number of ClusterCAD matches to return per module. Default 3.",
+      "description": "Maximum number of ClusterCAD matches to return (default 3).",
       "optional": true
     }
   ],
@@ -42,44 +47,44 @@
   "outputs": [
     {
       "type": "object",
-      "description": "Structured result with: source (str), total_modules (int), modules_with_matches (int), module_matches (array of per-module results each containing module_index, loading, design_domains, and natural_matches with accession, cluster_name, subunit_name, subunit_id, module_label, and domains array with domain_type, domain_id, annotation, and aa_sequence), and warnings (array of strings)."
+      "description": "Object with keys: loading (bool), at_substrate (str or null), reductive_domains (array of str), total_matches (int), matches (array of cluster results each with accession, cluster_name, subunit_name, subunit_id, module_label, and domains array with domain_type, domain_id, annotation, and aa_sequence), and warnings (array of str)."
     }
   ],
 
   "examples": [
     {
       "input": {
-        "design": {
-          "rank": 1,
-          "similarity": 0.85,
-          "product_smiles": "CCCC(=O)O",
-          "modules": [
-            {
-              "loading": true,
-              "domains": {
-                "AT": {"substrate": "Malonyl-CoA"}
-              }
-            },
-            {
-              "loading": false,
-              "domains": {
-                "AT": {"substrate": "Malonyl-CoA"},
-                "KR": {"type": "B1"}
-              }
-            }
-          ],
-          "exact_match": false
-        },
-        "source": "retrotide",
-        "max_matches_per_module": 2
+        "loading": true,
+        "at_substrate": "Malonyl-CoA",
+        "reductive_domains": "",
+        "max_matches": 3
       },
       "output": {
-        "source": "retrotide",
-        "total_modules": 2,
-        "modules_with_matches": 2,
+        "loading": true,
+        "at_substrate": "Malonyl-CoA",
+        "reductive_domains": [],
+        "total_matches": 2,
+        "matches": ["...cluster results with AA sequences..."],
         "warnings": []
       },
-      "notes": "RetroTide design with 2 modules — returns matching natural parts with AA sequences from ClusterCAD."
+      "notes": "Loading module with Malonyl-CoA AT, no reduction domains."
+    },
+    {
+      "input": {
+        "loading": false,
+        "at_substrate": "Methylmalonyl-CoA",
+        "reductive_domains": "KR,DH,ER",
+        "max_matches": 3
+      },
+      "output": {
+        "loading": false,
+        "at_substrate": "Methylmalonyl-CoA",
+        "reductive_domains": ["KR", "DH", "ER"],
+        "total_matches": 3,
+        "matches": ["...cluster results with AA sequences..."],
+        "warnings": []
+      },
+      "notes": "Extension module with methylmalonyl-CoA AT and full reductive loop."
     }
   ],
 
@@ -90,18 +95,17 @@
     "execution": "run",
     "disposal": null,
 
-    "mcp_name": "match_design_to_parts",
+    "mcp_name": "find_pks_module_parts",
     "seq_params": []
   },
 
   "trigger_phrases": [
-    "find natural parts for this design",
-    "get amino acid sequences for this PKS",
-    "match this design to ClusterCAD",
-    "find real parts for retrotide design",
-    "what natural modules match this design",
-    "get AA sequences for these modules",
-    "find biological parts for this PKS design"
+    "find matching modules in ClusterCAD",
+    "search for natural PKS modules with this domain profile",
+    "find parts for a loading module with Malonyl-CoA",
+    "get amino acid sequences for a module with KR and DH",
+    "what natural modules match this architecture",
+    "find ClusterCAD matches for this module"
   ],
 
   "dependencies": {

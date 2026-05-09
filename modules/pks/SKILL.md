@@ -224,12 +224,13 @@ Parameters:
 | acetyl-CoA | Acetyl-CoA |
 | pyruvate | pyr |
 
-### `match_design_to_parts`
-Automatically finds natural biological parts in ClusterCAD for each module in a
-RetroTide or TridentSynth PKS design, and returns amino acid sequences.
+### `find_pks_module_parts`
+Finds matching natural PKS modules in ClusterCAD for a **single module** with
+specified domain properties, and returns amino acid sequences for all domains.
+Call this once per module in a design.
 
 **Only call this tool when the user explicitly asks for amino acid sequences,
-natural parts, or real biological components for their design.**
+natural parts, or real biological components for a design module.**
 
 Use when the user asks to:
 - "find natural parts for this design"
@@ -238,20 +239,21 @@ Use when the user asks to:
 - "what real PKS modules match this architecture"
 
 **Input:**
-- `design` (dict) — a single design object from RetroTide or TridentSynth
-- `source` (str) — `"retrotide"` or `"tridentsynth"`
-- `max_matches_per_module` (int, default 3) — how many ClusterCAD matches per module
+- `loading` (bool) — is this a loading/starter module?
+- `at_substrate` (str, optional) — AT substrate name, e.g. "Malonyl-CoA", or empty
+- `reductive_domains` (str, optional) — comma-separated active reduction domains,
+  e.g. "KR,DH,ER" or "KR" or empty. Only "KR", "DH", "ER" recognized.
+- `max_matches` (int, default 3) — how many ClusterCAD matches to return
 
 **Output:**
-- `module_matches` — for each design module: the design domains, and an array of
-  natural matches from ClusterCAD, each with cluster accession, subunit info, and
-  amino acid sequences for every domain
-- `warnings` — any modules with no matches or failed lookups
+- `matches` — array of natural ClusterCAD modules, each with cluster accession,
+  subunit info, and amino acid sequences for every domain
+- `warnings` — any failed lookups
 
-**Workflow:** Pass a single design from RetroTide (e.g., `results[0]`) or the
-TridentSynth result dict directly. The tool normalizes the different formats
-internally, queries ClusterCAD for each module, and fetches AA sequences
-automatically.
+**Workflow:** Extract the properties of each module from a RetroTide or TridentSynth
+design (loading status, AT substrate, reductive domains) and call
+`find_pks_module_parts` once per module. Then pass AA sequences to
+`reverse_translate` for codon-optimized DNA.
 
 ---
 
@@ -380,8 +382,7 @@ Polls the antiSMASH server for results and parses the detailed PKS domain archit
    - `tridentsynth(smiles)` → PKS + tailoring hybrid pathways
 4. Present results based on feasibility score
 5. If user asks for amino acid sequences or natural parts:
-   `match_design_to_parts(design, source)` → ClusterCAD matches with AA sequences for each module
-6. `match_design_to_parts(design, source)` or ClusterCAD tools → get **amino acid sequence** for each module
+   For each module in the design, call `find_pks_module_parts(loading, at_substrate, reductive_domains)` → ClusterCAD matches with AA sequences
    _(RetroTide/TridentSynth output a design spec, NOT a sequence — this step is mandatory before antiSMASH)_
 7. `reverse_translate(aa_sequence, host)` → codon-optimized GenBank file; check for `warning` if < 1000 bp
 8. `submit_antismash(filepath=file_saved_at)` → submit GenBank directly (preferred over raw seq)
