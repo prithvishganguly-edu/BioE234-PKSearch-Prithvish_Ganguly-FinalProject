@@ -96,7 +96,8 @@ This is based on the well-established PKS engineering principle that TE domain r
 - SBSPKS intermediates are predicted by the assembly-line logic, not experimentally verified
 - Novel scaffolds with unusual extender units (e.g. methoxy-malonyl) may score low against all database entries
 - The MIBiG entries include only compounds where SMILES are available; some BGC products lack structural data
-- SBSPKS live endpoints are unavailable due to a server-side bug; the index reflects the last successful cache build
+- SBSPKS structure-search CGI endpoints (`search_similar1.cgi`, `search_functional.cgi`) have a persistent server-side permission bug and cannot be used for searching; however, `make_reaction.cgi` (pathway data) and `display_smiles.cgi` (SMILES retrieval) work correctly and are used for index building and pathway step fetching
+- MIBiG hits do not include assembly line steps since MIBiG only stores the final compound and BGC metadata
 
 ---
 

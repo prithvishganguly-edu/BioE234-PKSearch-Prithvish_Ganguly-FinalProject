@@ -20,7 +20,7 @@ Given a target molecule as a SMILES string, it searches a combined database of 4
 | `tools/search_pks.py` | Python implementation — `SearchPKS` class with `initiate()` and `run()` |
 | `tools/search_pks.json` | C9 JSON wrapper — tool schema, parameters, examples |
 | `tools/prompts.json` | 8 test prompts for Gemini tool-calling evaluation |
-| `tools/test_search_pks.py` | 39 pytest tests covering all functionality |
+| `tools/test_search_pks.py` | 43 pytest tests covering all functionality |
 | `SKILL.md` | Gemini guidance — when and how to call this tool |
 | `THEORY.md` | Algorithm explanation and biological background |
 | `data/` | Cache files (auto-generated, not committed) |
@@ -52,14 +52,17 @@ Gemini calls: search_pks(query_smiles=SMILES, similarity_threshold=0.4)
 | Field | Description |
 |-------|-------------|
 | `compound_name` | Name of the matching compound |
-| `organism` | Producing organism |
+| `organism` | Producing organism (all strains joined for MIBiG duplicates) |
 | `similarity_score` | Tanimoto coefficient (0.0–1.0) |
 | `source` | `sbspks` or `mibig` |
 | `is_intermediate` | `true` if match is a mid-pathway intermediate |
 | `module_number` | Which PKS module this intermediate is from |
-| `engineering_hint` | How to engineer early chain release (intermediates only) |
-| `bgc_accession` | MIBiG BGC accession for antiSMASH (MIBiG hits only) |
-| `pathway_steps` | Full biosynthetic steps (`pathway_search` mode only) |
+| `engineering_hint` | TE domain relocation hint (intermediates only) |
+| `engineering_recommendation` | Plain-English engineering guidance for every hit |
+| `bgc_url` | Full MIBiG URL (e.g. `https://mibig.secondarymetabolites.org/go/BGC0000055`) |
+| `all_bgc_urls` | All BGC URLs when multiple strains produce the same compound (MIBiG only) |
+| `producing_strains` | All producing strains when MIBiG has multiple entries for same compound |
+| `pathway_steps` | Biosynthetic assembly line steps — fetched in parallel for all SBSPKS hits |
 
 ---
 
