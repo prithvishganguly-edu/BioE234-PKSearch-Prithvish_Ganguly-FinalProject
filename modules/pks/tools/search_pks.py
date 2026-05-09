@@ -775,6 +775,36 @@ class SearchPKS:
                     mibig_groups[key] = []
                 mibig_groups[key].append((score, idx))
 
+        # ---- Pre-fetch pathway steps in parallel for all SBSPKS hits ---- #
+        # Collect unique path_keys from SBSPKS hits only
+        sbspks_path_keys = list({
+            self._combined_index[idx].get("path_key", "")
+            for _, idx in top_hits
+            if self._combined_index[idx]["source"] == "sbspks"
+               and self._combined_index[idx].get("path_key", "")
+        })
+
+        sbspks_steps_cache: Dict[str, list] = {}
+        if sbspks_path_keys:
+            def _fetch_steps(pk: str) -> tuple[str, list]:
+                try:
+                    url = f"{_BASE_URL}/make_reaction.cgi?path={pk}"
+                    resp = self._session.get(url, timeout=3)
+                    resp.raise_for_status()
+                    raw_labels = re.findall(r"label:\s*'([^']+)'", resp.text)
+                    steps = [
+                        raw.replace("\\n", " ").replace("\n", " ").strip()
+                        for raw in raw_labels
+                        if raw.strip()
+                    ]
+                    return pk, steps
+                except Exception:
+                    return pk, []
+
+            with ThreadPoolExecutor(max_workers=min(len(sbspks_path_keys), 5)) as ex:
+                for pk, steps in ex.map(_fetch_steps, sbspks_path_keys):
+                    sbspks_steps_cache[pk] = steps
+
         # ---- Build result dicts --------------------------------------- #
         results: List[Dict[str, Any]] = []
         seen_mibig_names: set[str] = set()
@@ -821,13 +851,10 @@ class SearchPKS:
                 })
                 continue
 
-            # SBSPKS hits — only fetch pathway steps in pathway_search mode.
-            # Fetching steps in reaction_search causes Gemini timeouts.
-            pathway_steps: list[str] = []
-            path_key = entry.get("path_key", "")
-            if search_type == "pathway_search" and path_key:
-                pathway_data = self._fetch_pathway_data(path_key, run_warnings)
-                pathway_steps = pathway_data.get("all_steps", [])
+            # SBSPKS hits — use pre-fetched pathway steps (parallel fetch above)
+            pathway_steps: list[str] = sbspks_steps_cache.get(
+                entry.get("path_key", ""), []
+            )
 
             entry_with_steps = {**entry, "pathway_steps": pathway_steps}
             results.append({
