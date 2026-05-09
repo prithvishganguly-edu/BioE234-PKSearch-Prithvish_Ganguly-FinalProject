@@ -122,7 +122,20 @@ Searches 4,088 polyketide structures (SBSPKS intermediates + MIBiG) for structur
 
 **Key parameters:** `query_smiles`, `similarity_threshold` (default 0.6, lower to 0.3 for distant scaffolds), `max_results` (default 5).
 
-**Display results as a structured list in this order:** compound_name → organism → similarity_score → source → is_intermediate → bgc_url (as clickable link) → engineering_hint → pathway_steps (as a numbered list, one step per line, only present in pathway_search mode) → engineering_recommendation (always show in full).
+**Display EVERY result in this EXACT format — do not deviate, summarize, or add prose between fields:**
+
+```
+Compound Name: <compound_name>
+Organism: <organism>
+Similarity Score: <similarity_score>
+Source: <source>
+Is Intermediate: <true/false>
+MIBiG URL: <bgc_url or None>
+Engineering Hint: <engineering_hint or None>
+Engineering Recommendation: <engineering_recommendation>
+```
+
+If pathway_steps is present, add it as a numbered list after Engineering Hint. Do not add any extra text before or after each result block. Do not write prose summaries.
 
 **When to stop:**
 - `similarity_score=1.0` → exact match exists naturally. Report it. Do NOT call retrotide or tridentsynth.
