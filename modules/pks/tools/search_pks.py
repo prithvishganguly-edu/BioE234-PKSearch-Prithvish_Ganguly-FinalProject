@@ -773,46 +773,89 @@ class SearchPKS:
                 f"threshold of {threshold}."
             )
 
+        # ---- Pre-group MIBiG hits by compound name ------------------- #
+        # MIBiG has multiple BGC submissions for the same compound from
+        # different strains. Group them so we show all strains/BGC URLs
+        # in one result rather than repeating the same compound.
+        mibig_groups: Dict[str, List[tuple]] = {}
+        for score, idx in top_hits:
+            entry = self._combined_index[idx]
+            if entry["source"] == "mibig":
+                key = entry["compound_name"].lower().strip()
+                if key not in mibig_groups:
+                    mibig_groups[key] = []
+                mibig_groups[key].append((score, idx))
+
         # ---- Build result dicts --------------------------------------- #
         results: List[Dict[str, Any]] = []
+        seen_mibig_names: set[str] = set()
         for score, idx in top_hits:
             entry = self._combined_index[idx]
 
-            # Always fetch pathway steps for SBSPKS hits so the
-            # engineering_recommendation can reference the actual assembly line
+            # MIBiG hits — merge duplicates into one result with all strains
+            if entry["source"] == "mibig":
+                name_key = entry["compound_name"].lower().strip()
+                if name_key in seen_mibig_names:
+                    continue
+                seen_mibig_names.add(name_key)
+                group = mibig_groups.get(name_key, [(score, idx)])
+                all_strains: List[str] = []
+                all_bgc_urls: List[str] = []
+                for _s, _i in group:
+                    e = self._combined_index[_i]
+                    strain = e.get("organism", "")
+                    if strain and strain not in all_strains:
+                        all_strains.append(strain)
+                    if e.get("bgc_accession"):
+                        url = f"https://mibig.secondarymetabolites.org/go/{e['bgc_accession']}"
+                        if url not in all_bgc_urls:
+                            all_bgc_urls.append(url)
+                primary_bgc = all_bgc_urls[0] if all_bgc_urls else None
+                results.append({
+                    "compound_name":             entry["compound_name"],
+                    "smiles":                    entry["smiles"],
+                    "similarity_score":          round(score, 4),
+                    "source":                    "mibig",
+                    "is_intermediate":           False,
+                    "module_number":             None,
+                    "pathway_name":              entry["pathway_name"],
+                    "organism":                  ", ".join(all_strains) if len(all_strains) > 1 else (all_strains[0] if all_strains else entry["organism"]),
+                    "producing_strains":         all_strains,
+                    "bgc_url":                   primary_bgc,
+                    "all_bgc_urls":              all_bgc_urls,
+                    "pathway_steps":             [],
+                    "engineering_hint":          None,
+                    "engineering_recommendation": _generate_engineering_recommendation(
+                        {**entry, "bgc_url": primary_bgc, "bgc_accession": None},
+                        round(score, 4)
+                    ),
+                })
+                continue
+
+            # SBSPKS hits — fetch pathway steps
             pathway_steps: list[str] = []
-            if entry["source"] == "sbspks":
-                path_key = entry.get("path_key", "")
-                if path_key:
-                    pathway_data = self._fetch_pathway_data(
-                        path_key, run_warnings
-                    )
-                    pathway_steps = pathway_data.get("all_steps", [])
+            path_key = entry.get("path_key", "")
+            if path_key:
+                pathway_data = self._fetch_pathway_data(path_key, run_warnings)
+                pathway_steps = pathway_data.get("all_steps", [])
 
-            # Build enriched entry for recommendation generator
             entry_with_steps = {**entry, "pathway_steps": pathway_steps}
-
-            result: Dict[str, Any] = {
-                "compound_name":    entry["compound_name"],
-                "smiles":           entry["smiles"],
-                "similarity_score": round(score, 4),
-                "source":           entry["source"],
-                "is_intermediate":  entry["is_intermediate"],
-                "module_number":    entry["module_number"],
-                "pathway_name":     entry["pathway_name"],
-                "organism":         entry["organism"],
-                "bgc_url":          (
-                    f"https://mibig.secondarymetabolites.org/go/{entry['bgc_accession']}"
-                    if entry.get("bgc_accession") else None
-                ),
-                "pathway_steps":    pathway_steps,
-                "engineering_hint": _generate_engineering_hint(entry),
+            results.append({
+                "compound_name":             entry["compound_name"],
+                "smiles":                    entry["smiles"],
+                "similarity_score":          round(score, 4),
+                "source":                    entry["source"],
+                "is_intermediate":           entry["is_intermediate"],
+                "module_number":             entry["module_number"],
+                "pathway_name":              entry["pathway_name"],
+                "organism":                  entry["organism"],
+                "bgc_url":                   None,
+                "pathway_steps":             pathway_steps,
+                "engineering_hint":          _generate_engineering_hint(entry),
                 "engineering_recommendation": _generate_engineering_recommendation(
                     entry_with_steps, round(score, 4)
                 ),
-            }
-
-            results.append(result)
+            })
 
         return {
             "query_smiles":     query_smiles,
