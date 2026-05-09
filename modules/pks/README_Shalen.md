@@ -1,80 +1,97 @@
-# TridentSynth Tool and GUI Contribution
+# PKS Module — tridentsynth and Streamlit GUI
 
-**Author:** Shalen Ardeshna 
+**Author:** Shalen Ardeshna  
 **Course:** BioE 134, Spring 2026  
 
 ---
 
-## Overview
+## What this contribution does
 
-This contribution adds two main features to the PKS design MCP project:
+This contribution adds two connected pieces to the PKS design MCP project:
 
-1. A live `tridentsynth` MCP tool that connects Gemini to the TridentSynth web server.
-2. A Streamlit GUI that lets users interact with the MCP + Gemini system through a browser instead of the terminal.
+1. **`tridentsynth`** — a live MCP tool that submits target molecules to the TridentSynth web server and parses the best PKS-based synthesis pathway.
+2. **`app_streamlit.py`** — a browser-based GUI for interacting with Gemini and the MCP tools without using the terminal-only client.
 
-Together, these additions make the project more usable for PKS pathway design because users can submit target molecules, run pathway searches, and view summarized results in a graphical chat interface.
+The goal is to let Gemini move from a natural-language request to a real TridentSynth pathway search, then return useful pathway information in a clean text summary.
 
 ---
 
-## TridentSynth MCP Tool
+## Files
 
-### Purpose
+| File | Description |
+|------|-------------|
+| `modules/pks/tools/tridentsynth.py` | Python implementation for live TridentSynth submission, polling, parsing, and result cleanup |
+| `modules/pks/tools/tridentsynth.json` | C9 JSON wrapper for MCP tool registration |
+| `modules/pks/tools/prompts.json` | Prompt examples for Gemini tool-calling evaluation |
+| `tests/test_tridentsynth.py` | Pytest coverage for payload construction, parsing, validation, and cleanup |
+| `app_streamlit.py` | Streamlit GUI for browser-based Gemini + MCP interaction |
+| `modules/pks/tools/README_tridentsynth.md` | Tool-specific documentation |
+| `modules/pks/tools/THEORY_tridentsynth.md` | Background and design explanation |
 
-The `tridentsynth` tool allows Gemini to run live TridentSynth pathway searches from a target SMILES string. Instead of only reasoning from general chemistry knowledge, Gemini can submit a real query to TridentSynth and return the best predicted PKS-based synthesis pathway.
+---
 
-### What the Tool Does
+## Tool 1 — `tridentsynth`
 
-The tool:
+`tridentsynth` answers the question:
 
-1. Takes a target molecule as a SMILES string.
-2. Builds a TridentSynth-compatible form submission.
-3. Selects synthesis strategies such as PKS, biological synthesis, and/or chemical synthesis.
-4. Submits the job to the live TridentSynth web server.
-5. Waits for the completed results page.
-6. Parses the best pathway.
-7. Returns the result as structured data and a clean text summary.
+> Given a target molecule, what PKS-based pathway can TridentSynth propose to make it?
 
-### Inputs
+The tool accepts a target SMILES string and optional synthesis settings, submits the job to TridentSynth, waits for the result page, and parses the best pathway.
 
-Important inputs include:
+### Main parameters
 
-- `target_smiles`: Target molecule as a SMILES string.
-- `use_pks`: Whether to use PKS assembly.
-- `use_bio`: Whether to use biological tailoring steps.
-- `use_chem`: Whether to use chemical tailoring steps.
-- `max_bio_steps`: Maximum number of biological steps.
-- `max_chem_steps`: Maximum number of chemical steps.
-- `pks_release_mechanism`: PKS release method, such as `thiolysis` or `cyclization`.
-- `pks_starters`: Optional PKS starter substrates.
-- `pks_extenders`: Optional PKS extender substrates.
-- `wait_for_completion`: Whether to wait for the full completed result.
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `target_smiles` | string | required | Single target-molecule SMILES string |
+| `use_pks` | bool | `true` | Include PKS assembly |
+| `use_bio` | bool | `false` | Include biological tailoring |
+| `use_chem` | bool | `false` | Include chemical tailoring |
+| `max_bio_steps` | int | `1` when auto-filled | Maximum biological tailoring steps |
+| `max_chem_steps` | int | `1` when auto-filled | Maximum chemical tailoring steps |
+| `pks_release_mechanism` | string | inferred | `thiolysis` or `cyclization` |
+| `pks_starters` | array | auto-filled | Optional PKS starter substrates |
+| `pks_extenders` | array | auto-filled | Optional PKS extender substrates |
+| `wait_for_completion` | bool | `true` | Polls until results are complete |
+| `timeout_seconds` | int | `600` | Maximum wait time |
+| `poll_seconds` | int | `5` | Time between polling attempts |
 
-### Outputs
+### Main outputs
 
-The tool returns:
+| Field | Description |
+|-------|-------------|
+| `status` | `submitted`, `completed`, or `timed_out` |
+| `task_id` | TridentSynth job/task ID |
+| `submitted_query` | Normalized query submitted to TridentSynth |
+| `result.text_summary` | Clean text summary for Gemini to display directly |
+| `result.synthesis_parameters` | Target, strategy, PKS release, starters/extenders, and step settings |
+| `result.selected_steps` | Bio/Chem step counts actually selected |
+| `result.pks_modules` | Parsed PKS module architecture |
+| `result.best_pathway` | PKS product, final product, reaction SMILES, reaction rules, enthalpy, feasibility, and pathway structures |
 
-- job status
-- TridentSynth task ID
-- submitted query
-- synthesis parameters
-- selected steps
-- PKS modules
-- PKS product SMILES
-- final post-PKS product SMILES
-- similarity scores
-- reaction SMILES
-- reaction rule names
-- reaction enthalpy
-- pathway structures as SMILES
-- a clean `text_summary` for Gemini to display directly
+---
 
-### Example Prompt
+## Example usage
 
 ```text
-Use the tridentsynth tool with target_smiles CCCCCC, use_pks true, use_bio false, use_chem true, max_chem_steps 1, wait_for_completion true, timeout_seconds 300, poll_seconds 5.
+User: Use TridentSynth to find a PKS plus chemical synthesis pathway for hexane. The target SMILES is CCCCCC.
 ```
 
-### Example Output
+Example tool call:
+
+```text
+tridentsynth(
+    target_smiles="CCCCCC",
+    use_pks=true,
+    use_bio=false,
+    use_chem=true,
+    max_chem_steps=1,
+    wait_for_completion=true,
+    timeout_seconds=300,
+    poll_seconds=5
+)
+```
+
+Example output summary:
 
 ```text
 TridentSynth result
@@ -97,143 +114,92 @@ Best pathway:
 - Pathway structures SMILES: CCCCCCC(=O)O, CCCCCC, O=C=O
 ```
 
-### Why This Matters
-
-This tool makes the project more powerful because it connects the MCP system to an external pathway design platform. Gemini can now run a specialized TridentSynth search, extract the best pathway, and summarize relevant PKS design information in plain text.
-
 ---
 
-## Streamlit GUI
+## Tool 2 — Streamlit GUI
 
-### Purpose
-
-The Streamlit GUI provides a browser-based interface for the MCP + Gemini system. Before this, users had to interact with Gemini through the terminal. The GUI makes the project easier to demo and easier for users to interact with.
-
-### What the GUI Does
+The Streamlit GUI gives the project a browser chat interface instead of requiring users to run the terminal-only Gemini client.
 
 The GUI:
 
-1. Starts a local Streamlit web app.
-2. Connects to Gemini.
-3. Connects to the MCP server.
-4. Lists registered MCP tools.
-5. Lets the user type prompts into a chat interface.
-6. Allows Gemini to call tools automatically.
-7. Displays the final response in the browser.
+1. Connects to Gemini.
+2. Starts and maintains an MCP connection.
+3. Lists registered MCP tools.
+4. Lets the user type prompts in a browser.
+5. Lets Gemini call MCP tools automatically.
+6. Displays the final response in the browser.
 
-### Main File
+The GUI uses `st.cache_resource` to keep the MCP connection alive across messages. Use the **Restart MCP connection** button after changing tool files or if the MCP connection gets stuck.
 
-The GUI is implemented in:
+---
 
-```text
-app_streamlit.py
-```
-
-It should be placed in the repo root, at the same level as:
-
-```text
-client_gemini.py
-server.py
-requirements.txt
-modules/
-```
-
-### Running the GUI
+## Running the GUI
 
 From the repo root:
 
 ```bash
-cd ~/Documents/GitHub/2026-bioe234-final-project-pks
 source .venv/bin/activate
 streamlit run app_streamlit.py
 ```
 
-This opens a local browser app, usually at:
+The app usually opens at:
 
 ```text
 http://localhost:8501
 ```
 
-### Persistent MCP Connection
-
-The GUI uses `st.cache_resource` to keep a persistent MCP connection alive. This prevents the app from restarting the MCP server for every message, making the GUI faster and smoother.
-
-The sidebar includes a restart button that can be used after changing tool files:
-
-```text
-Restart MCP connection
-```
-
-### Why This Matters
-
-The GUI makes the project more accessible and presentation-ready. Instead of typing prompts in a terminal, users can interact with the system through a clean chat interface. This is especially useful for demonstrating TridentSynth because the user can run a pathway search and view the parsed results directly in the browser.
-
 ---
 
-## Requirements Added
+## Running tests
 
-This contribution requires the following packages:
-
-```text
-streamlit
-requests
-beautifulsoup4
-pytest
-```
-
-These should be included in `requirements.txt`.
-
-Install all requirements with:
-
-```bash
-python -m pip install -r requirements.txt
-```
-
----
-
-## Testing
-
-The TridentSynth tool includes a pytest file:
-
-```text
-tests/test_tridentsynth.py
-```
-
-The tests check:
-
-- payload construction
-- PKS/Bio/Chem strategy selection
-- invalid SMILES validation
-- reaction SMILES parsing
-- PKS module parsing
-- result-page parsing
-- target SMILES correction
-- selected step handling
-
-Run the tests with:
+Run the TridentSynth tests with:
 
 ```bash
 python -m pytest tests/test_tridentsynth.py
 ```
 
-Expected result:
+Expected normal result:
 
 ```text
 11 passed, 1 skipped
 ```
 
-The skipped test is the optional live TridentSynth test. It only runs if:
+The skipped test is the optional live TridentSynth submission test. To run it:
 
 ```bash
-RUN_LIVE_TRIDENTSYNTH=1
+RUN_LIVE_TRIDENTSYNTH=1 python -m pytest tests/test_tridentsynth.py
 ```
-
-is set.
 
 ---
 
-## Summary of Contribution
+## Test coverage
 
-This contribution adds a live TridentSynth pathway design tool and a graphical interface for the MCP project.
+The pytest file covers:
 
-The TridentSynth tool expands the system from static/local PKS utilities to a live pathway search workflow. The GUI improves usability by allowing users to interact with Gemini and the MCP tools through a browser. Together, these additions make the project easier to use, easier to demo, and more useful for PKS pathway design.
+| Area | Description |
+|------|-------------|
+| Payload construction | Confirms correct TridentSynth form fields |
+| Strategy selection | Checks PKS, Bio, and Chem options |
+| Input validation | Rejects invalid SMILES and invalid step counts |
+| PKS options | Tests release mechanism, starters, and extenders |
+| Reaction parsing | Splits reaction SMILES into reactants and products |
+| PKS module parsing | Extracts module/domain architecture |
+| Result parsing | Extracts best pathway fields from result HTML |
+| Target correction | Prevents target SMILES from being confused with intermediates |
+| Selected steps | Prevents unselected Bio/Chem steps from appearing |
+| Optional live test | Allows real website submission only when explicitly enabled |
+
+---
+
+## Notes for users
+
+- `tridentsynth` depends on the live TridentSynth website being available.
+- Large pathway searches may take longer than simple examples.
+- The returned pathway is computationally predicted and should be experimentally validated before use.
+- The tool is intended to return TridentSynth pathway predictions, not to replace manual biological review.
+
+---
+
+## Summary
+
+This contribution connects the MCP project to a real external PKS pathway design platform and adds a browser-based interface for using it. The `tridentsynth` tool runs live pathway searches and returns cleaned pathway results, while the Streamlit GUI makes the system easier to demo and interact with.
