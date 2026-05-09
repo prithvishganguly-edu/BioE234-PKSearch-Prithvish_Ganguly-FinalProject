@@ -106,52 +106,20 @@ domain architecture of each proposed PKS. Do NOT omit or summarize the modules.
 ---
 
 ### `pks_search_sbspks`
-Searches a combined database of 4,088 polyketide structures (2,440 SBSPKS biosynthetic
-intermediates + 1,648 MIBiG polyketide compounds) for entries structurally similar to a
-query SMILES. Returns ranked hits with Tanimoto similarity scores and engineering hints.
+Searches 4,088 polyketide structures (SBSPKS intermediates + MIBiG) for structural similarity to a query SMILES.
 
-Use when the user asks to:
-- "find natural products similar to [molecule]"
-- "what PKS pathway builds something like [molecule]"
-- "I want to make [molecule] with a PKS, what's closest in nature"
-- "search for related polyketides"
-- "does this molecule appear as a PKS intermediate"
+**Workflow:** If given a name → call `resolve_smiles` first, then `pks_search_sbspks`. Never pass a name directly.
 
-**Workflow — always follow this order:**
-1. If the user gives a compound name (not a SMILES), call `resolve_smiles` first.
-2. Then call `pks_search_sbspks` with that SMILES.
-3. Never pass a compound name directly to `pks_search_sbspks`.
+**Key parameters:** `query_smiles`, `similarity_threshold` (default 0.6, lower to 0.3 for distant scaffolds), `max_results` (default 5).
 
-**Parameters:**
-- `query_smiles` — SMILES of the target (use resolve_smiles first if given a name)
-- `search_type` — "reaction_search" (default) or "pathway_search" (includes full biosynthetic steps)
-- `similarity_threshold` — minimum Tanimoto score; default 0.6, lower to 0.3–0.4 for distant scaffolds
-- `max_results` — max hits to return, default 5
+**Display results as a structured list in this order:** compound_name → organism → similarity_score → source → is_intermediate → bgc_url (as clickable link) → engineering_hint → engineering_recommendation (always show in full).
 
-**Presenting results — IMPORTANT: always display every hit as a structured list. Never summarize or omit hits. For each result show fields in this exact order:**
-1. `compound_name` — name of the matching compound
-2. `organism` — producing organism (italicised)
-3. `similarity_score` — Tanimoto score (e.g. 1.0, 0.87)
-4. `source` — sbspks or mibig
-5. `is_intermediate` — true/false
-6. `bgc_url` — show as a clickable link if present (e.g. "MIBiG page: https://mibig.secondarymetabolites.org/go/BGC0000094")
-7. `engineering_hint` — show in full if present, never omit
-8. `engineering_recommendation` — always show this last; it is the most actionable field for the researcher
+**When to stop:**
+- `similarity_score=1.0` → exact match exists naturally. Report it. Do NOT call retrotide or tridentsynth.
+- Score 0.4–0.99 → report hits, optionally suggest retrotide to compare module layouts.
+- No hits above 0.4 → then call retrotide and/or tridentsynth.
 
-**IMPORTANT — when to stop after pks_search_sbspks:**
-- If any result has `similarity_score=1.0` → the compound is already made naturally. Report the exact match and assembly line. Do NOT call retrotide or tridentsynth — they are unnecessary and will confuse the researcher.
-- If best score is 0.4–0.99 → report the hits, then optionally suggest the researcher run retrotide to compare module architectures.
-- If no hits above 0.4 → then call retrotide and/or tridentsynth to design a pathway from scratch.
-
-**Interpreting results:**
-- `similarity_score` 1.0 = exact match already in database
-- `similarity_score` >0.7 = very similar scaffold, same compound family
-- `similarity_score` 0.4–0.7 = related polyketide family, worth engineering
-- `similarity_score` <0.4 = distantly related; mention this caveat to the user
-- `is_intermediate=true` means the match is a mid-pathway intermediate, not a final product;
-  the `engineering_hint` field explains how to engineer early chain release from that pathway
-- `bgc_url` is present only for MIBiG hits — display it as a clickable link
-- If no hits appear, suggest lowering `similarity_threshold` to 0.3
+**Score guide:** 1.0=exact, >0.7=same family, 0.4–0.7=related scaffold, <0.4=distantly related. If no hits, suggest lowering threshold to 0.3.
 
 ---
 
