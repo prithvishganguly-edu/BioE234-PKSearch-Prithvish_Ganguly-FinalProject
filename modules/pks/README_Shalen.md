@@ -25,8 +25,7 @@ The goal is to let Gemini move from a natural-language request to a real Trident
 | `modules/pks/tools/prompts.json` | Prompt examples for Gemini tool-calling evaluation |
 | `tests/test_tridentsynth.py` | Pytest coverage for payload construction, parsing, validation, and cleanup |
 | `app_streamlit.py` | Streamlit GUI for browser-based Gemini + MCP interaction |
-| `modules/pks/tools/README_tridentsynth.md` | Tool-specific documentation |
-| `modules/pks/tools/THEORY_tridentsynth.md` | Background and design explanation |
+| `modules/pks/tools/THEORY.md` | Background and design explanation |
 
 ---
 
