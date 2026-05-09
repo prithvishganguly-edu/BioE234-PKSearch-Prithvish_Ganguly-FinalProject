@@ -467,11 +467,14 @@ def _generate_engineering_recommendation(entry: dict, similarity_score: float) -
     # --- Final product hits ---
     if similarity_score == 1.0:
         rec = (
-            f"Exact match — {pathway} from {organism} already produces this compound. "
-            f"No engineering needed. See pathway_steps for the full assembly line."
+            f"Exact structural match (Tanimoto similarity = 1.0 via RDKit Morgan fingerprints) — "
+            f"{pathway} from {organism} produces this compound. "
+            f"The native pathway is characterized but note that practical production may still require "
+            f"host optimization, fermentation engineering, or heterologous expression to achieve "
+            f"viable titers. See pathway_steps for the full assembly line."
         )
         if source == "mibig" and entry.get("bgc_url"):
-            rec += f" Full gene cluster reference: {entry['bgc_url']}"
+            rec += f" Reference gene cluster: {entry['bgc_url']}"
         return rec
 
     retrotide_tip = (

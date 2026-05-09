@@ -593,8 +593,8 @@ class TestEngineeringRecommendation:
             assert isinstance(hit["engineering_recommendation"], str)
             assert len(hit["engineering_recommendation"]) > 20
 
-    def test_exact_match_recommendation_says_no_engineering(self, tool):
-        """Exact match (sim=1.0) recommendation must say no engineering needed."""
+    def test_exact_match_recommendation_mentions_tanimoto(self, tool):
+        """Exact match (sim=1.0) recommendation must mention Tanimoto similarity."""
         result = tool.run(
             query_smiles=PIKROMYCIN_SMILES,
             max_results=1,
@@ -602,7 +602,7 @@ class TestEngineeringRecommendation:
         )
         top = result["results"][0]
         assert top["similarity_score"] == 1.0
-        assert "no engineering" in top["engineering_recommendation"].lower()
+        assert "tanimoto" in top["engineering_recommendation"].lower()
 
     def test_intermediate_recommendation_mentions_te_domain(self, tool):
         """Intermediate hit recommendation must mention TE domain relocation."""
