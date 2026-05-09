@@ -131,6 +131,7 @@ Searches 4,088 polyketide structures (SBSPKS intermediates + MIBiG) for structur
 - **Is Intermediate:** <true/false>
 - **MIBiG URL:** <bgc_url as hyperlink, or None>
 - **Engineering Hint:** <engineering_hint or None>
+- **Assembly Line:** If pathway_steps is a non-empty list, display each step as a numbered list here. If empty, write "Not available".
 - **Engineering Recommendation:** <engineering_recommendation>
 
 Separate each result with a horizontal rule (---). Do not write prose summaries before or after the results.
