@@ -122,20 +122,18 @@ Searches 4,088 polyketide structures (SBSPKS intermediates + MIBiG) for structur
 
 **Key parameters:** `query_smiles`, `similarity_threshold` (default 0.6, lower to 0.3 for distant scaffolds), `max_results` (default 5).
 
-**Display EVERY result in this EXACT format — do not deviate, summarize, or add prose between fields:**
+**Display EVERY result as a markdown bullet list. Each field on its own line. Use this exact format:**
 
-```
-Compound Name: <compound_name>
-Organism: <organism>
-Similarity Score: <similarity_score>
-Source: <source>
-Is Intermediate: <true/false>
-MIBiG URL: <bgc_url or None>
-Engineering Hint: <engineering_hint or None>
-Engineering Recommendation: <engineering_recommendation>
-```
+- **Compound Name:** <compound_name>
+- **Organism:** *<organism>*
+- **Similarity Score:** <similarity_score>
+- **Source:** <source>
+- **Is Intermediate:** <true/false>
+- **MIBiG URL:** <bgc_url as hyperlink, or None>
+- **Engineering Hint:** <engineering_hint or None>
+- **Engineering Recommendation:** <engineering_recommendation>
 
-If pathway_steps is present, add it as a numbered list after Engineering Hint. Do not add any extra text before or after each result block. Do not write prose summaries.
+Separate each result with a horizontal rule (---). Do not write prose summaries before or after the results.
 
 **When to stop:**
 - `similarity_score=1.0` → exact match exists naturally. Report it. Do NOT call retrotide or tridentsynth.
