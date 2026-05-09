@@ -466,51 +466,43 @@ def _generate_engineering_recommendation(entry: dict, similarity_score: float) -
 
     # --- Final product hits ---
     if similarity_score == 1.0:
-        if steps:
-            steps_str = " → ".join(steps)
-            rec = (
-                f"Exact match — {pathway} from {organism} already produces this compound. "
-                f"No engineering needed. Assembly line: {steps_str}."
-            )
-        else:
-            rec = (
-                f"Exact match — {pathway} from {organism} already produces this compound. "
-                f"No engineering needed."
-            )
+        rec = (
+            f"Exact match — {pathway} from {organism} already produces this compound. "
+            f"No engineering needed. See pathway_steps for the full assembly line."
+        )
         if source == "mibig" and entry.get("bgc_url"):
             rec += f" Full gene cluster reference: {entry['bgc_url']}"
         return rec
 
     retrotide_tip = (
         "Run pks_design_retrotide on your target to get its required module "
-        "layout, then compare against this pathway to identify which modules need swapping."
+        "layout, then compare against the pathway_steps to identify which modules need swapping."
     )
 
-    # Format pathway steps if available
-    if steps:
-        steps_str = " → ".join(steps)
-        pathway_detail = f"Assembly line for {pathway}: {steps_str}."
-    else:
-        pathway_detail = f"Pathway steps unavailable for {pathway} (SBSPKS server unreachable)."
+    has_steps = bool(steps)
 
     if similarity_score >= 0.7:
         return (
             f"High similarity ({similarity_score:.2f}) to {pathway} from {organism}. "
             f"Strong engineering scaffold — the core PKS architecture is likely "
-            f"compatible with your target. {pathway_detail} {retrotide_tip}"
+            f"compatible with your target. "
+            f"{'See pathway_steps for the full assembly line. ' if has_steps else 'Pathway steps unavailable (SBSPKS server unreachable). '}"
+            f"{retrotide_tip}"
         )
 
     if similarity_score >= 0.4:
         return (
             f"Moderate similarity ({similarity_score:.2f}) to {pathway} from {organism}. "
             f"Related scaffold but with meaningful structural differences. "
-            f"{pathway_detail} {retrotide_tip}"
+            f"{'See pathway_steps for the full assembly line. ' if has_steps else 'Pathway steps unavailable (SBSPKS server unreachable). '}"
+            f"{retrotide_tip}"
         )
 
     return (
         f"Low similarity ({similarity_score:.2f}) to {pathway} from {organism}. "
         f"Distantly related — may share extender unit logic or tailoring enzymes "
-        f"even if the core scaffold differs. {pathway_detail}"
+        f"even if the core scaffold differs. "
+        f"{'See pathway_steps for the full assembly line.' if has_steps else 'Pathway steps unavailable (SBSPKS server unreachable).'}"
     )
 
 
