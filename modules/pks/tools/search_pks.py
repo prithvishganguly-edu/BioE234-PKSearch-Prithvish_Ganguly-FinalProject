@@ -475,34 +475,28 @@ def _generate_engineering_recommendation(entry: dict, similarity_score: float) -
         return rec
 
     retrotide_tip = (
-        "Run pks_design_retrotide on your target to get its required module "
-        "layout, then compare against the pathway_steps to identify which modules need swapping."
+        "Run pks_design_retrotide on your target to get its required module layout, "
+        "then compare against this pathway to identify which modules need swapping. "
+        "Re-run this search with search_type='pathway_search' to see the full assembly line."
     )
-
-    has_steps = bool(steps)
 
     if similarity_score >= 0.7:
         return (
             f"High similarity ({similarity_score:.2f}) to {pathway} from {organism}. "
             f"Strong engineering scaffold — the core PKS architecture is likely "
-            f"compatible with your target. "
-            f"{'See pathway_steps for the full assembly line. ' if has_steps else 'Pathway steps unavailable (SBSPKS server unreachable). '}"
-            f"{retrotide_tip}"
+            f"compatible with your target. {retrotide_tip}"
         )
 
     if similarity_score >= 0.4:
         return (
             f"Moderate similarity ({similarity_score:.2f}) to {pathway} from {organism}. "
-            f"Related scaffold but with meaningful structural differences. "
-            f"{'See pathway_steps for the full assembly line. ' if has_steps else 'Pathway steps unavailable (SBSPKS server unreachable). '}"
-            f"{retrotide_tip}"
+            f"Related scaffold but with meaningful structural differences. {retrotide_tip}"
         )
 
     return (
         f"Low similarity ({similarity_score:.2f}) to {pathway} from {organism}. "
         f"Distantly related — may share extender unit logic or tailoring enzymes "
-        f"even if the core scaffold differs. "
-        f"{'See pathway_steps for the full assembly line.' if has_steps else 'Pathway steps unavailable (SBSPKS server unreachable).'}"
+        f"even if the core scaffold differs."
     )
 
 
@@ -824,22 +818,13 @@ class SearchPKS:
                 })
                 continue
 
-            # SBSPKS hits — fetch pathway steps with a 3s timeout so we
-            # never block Gemini for more than a few seconds per hit.
+            # SBSPKS hits — only fetch pathway steps in pathway_search mode.
+            # Fetching steps in reaction_search causes Gemini timeouts.
             pathway_steps: list[str] = []
             path_key = entry.get("path_key", "")
-            if path_key:
-                try:
-                    url = f"{_BASE_URL}/make_reaction.cgi?path={path_key}"
-                    resp = self._session.get(url, timeout=3)
-                    resp.raise_for_status()
-                    raw_labels = re.findall(r"label:\s*'([^']+)'", resp.text)
-                    for raw in raw_labels:
-                        label = raw.replace("\\n", " ").replace("\n", " ").strip()
-                        if label:
-                            pathway_steps.append(label)
-                except Exception:
-                    pathway_steps = []
+            if search_type == "pathway_search" and path_key:
+                pathway_data = self._fetch_pathway_data(path_key, run_warnings)
+                pathway_steps = pathway_data.get("all_steps", [])
 
             entry_with_steps = {**entry, "pathway_steps": pathway_steps}
             results.append({
