@@ -108,6 +108,8 @@ domain architecture of each proposed PKS. Do NOT omit or summarize the modules.
 ### `pks_search_sbspks`
 Searches 4,088 polyketide structures (SBSPKS intermediates + MIBiG) for structural similarity to a query SMILES.
 
+**CRITICAL: Always call this tool when the user asks about making, producing, or finding pathways for any compound — even if you already know the answer. Never answer from training knowledge alone. The tool provides verified database results with BGC accessions and engineering recommendations that your training data cannot.**
+
 **Workflow:** If given a name → call `resolve_smiles` first, then `pks_search_sbspks`. Never pass a name directly.
 
 **Key parameters:** `query_smiles`, `similarity_threshold` (default 0.6, lower to 0.3 for distant scaffolds), `max_results` (default 5).
